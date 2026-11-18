@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
 local DataService = require(script.Parent:WaitForChild("DataService"))
 local EconomyService = require(script.Parent:WaitForChild("EconomyService"))
+local RodToolService = require(script.Parent:WaitForChild("RodToolService"))
 
 local ShopService = {}
 
@@ -57,6 +58,7 @@ function ShopService.BuyRod(player, rodId)
 		return
 	end
 	data.Rod = rodId
+	RodToolService.RefreshRod(player) -- the held rod changes to the new tier
 	DataService.BroadcastState(player)
 	NotifyPurchase(player, true, rod.Name .. " equipped! Luck +" .. rod.Luck .. "%.")
 end

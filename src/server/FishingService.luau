@@ -14,6 +14,7 @@ local TankService = require(script.Parent:WaitForChild("TankService"))
 local EconomyService = require(script.Parent:WaitForChild("EconomyService"))
 local QuestService = require(script.Parent:WaitForChild("QuestService"))
 local MonsterState = require(script.Parent:WaitForChild("MonsterState"))
+local RodToolService = require(script.Parent:WaitForChild("RodToolService"))
 
 local FishingService = {}
 
@@ -140,6 +141,9 @@ function FishingService.StartCast(player, spotId)
 	if (root.Position - spot.Position).Magnitude > spot.Radius + 6 then
 		return
 	end
+
+	-- The cast should always show the rod in hand.
+	RodToolService.EnsureEquipped(player)
 
 	data.Fishing = { State = "Waiting", SpotId = spotId }
 	GetRemote("FishingUpdate"):FireClient(player, "cast", { SpotId = spotId })

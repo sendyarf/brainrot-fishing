@@ -62,6 +62,8 @@ local StealService = require(script:WaitForChild("StealService"))
 local MonsterEventService = require(script:WaitForChild("MonsterEventService"))
 local RebirthService = require(script:WaitForChild("RebirthService"))
 local QuestService = require(script:WaitForChild("QuestService"))
+local RodToolService = require(script:WaitForChild("RodToolService"))
+RodToolService.Init() -- visible rod in hand, on spawn and after unequip
 
 -- 4. Wire the client -> server handlers.
 GetRemote("CastFish").OnServerEvent:Connect(function(player, spotId)
