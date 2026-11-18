@@ -1,7 +1,8 @@
--- FishDefinitions: the 9 original brainrot fish of Brainrot Fishing.
--- Names are Indonesian (the user's choice); every other word is English.
--- Each fish has a distinct body color, accent color and signature accessory
--- so it reads at a glance in a tank label and in a 382x238 screenshot.
+-- FishDefinitions: the 12 brainrot of Brainrot Fishing — 9 original fish
+-- plus 3 famous brainrot legends (Mythic tier). Names are Indonesian (the
+-- user's choice); every other word is English. Each fish has a distinct
+-- body color, accent color and signature accessory so it reads at a glance
+-- in a tank label and in a 382x238 screenshot.
 
 local FishDefinitions = {}
 
@@ -97,6 +98,33 @@ FishDefinitions.Fish = {
 		Accessory = "Dragon",
 		Description = "The giant green-gold dragon guardian of the lake.",
 	},
+	TungTungSahur = {
+		Name = "Tung Tung Tung Sahur",
+		Rarity = "Mythic",
+		Income = 900,
+		BodyColor = Color3.fromRGB(150, 100, 55),
+		AccentColor = Color3.fromRGB(110, 70, 35),
+		Accessory = "BaseballBat",
+		Description = "A furious wooden log with a baseball bat. Never wake it at sahur.",
+	},
+	TralaleroTralala = {
+		Name = "Tralalero Tralala",
+		Rarity = "Mythic",
+		Income = 1400,
+		BodyColor = Color3.fromRGB(160, 170, 185),
+		AccentColor = Color3.fromRGB(60, 120, 255),
+		Accessory = "Sneakers",
+		Description = "A shark with three legs in blue sneakers. It walks. It swims. It sings.",
+	},
+	BombardiroCrocodilo = {
+		Name = "Bombardiro Crocodilo",
+		Rarity = "Mythic",
+		Income = 2000,
+		BodyColor = Color3.fromRGB(70, 170, 80),
+		AccentColor = Color3.fromRGB(230, 230, 235),
+		Accessory = "PlaneWings",
+		Description = "A crocodile bomber plane with a propeller nose. Cleared for takeoff.",
+	},
 }
 
 FishDefinitions.FishByTier = {
@@ -104,7 +132,16 @@ FishDefinitions.FishByTier = {
 	Rare = { "MujairMaestro", "PatinPianissimo" },
 	Epic = { "KoiKavaleri", "ArwanaAstronaut" },
 	Legendary = { "SidatSultan", "BelutBarista" },
-	Mythic = { "NagaNila" },
+	Mythic = { "NagaNila", "TungTungSahur", "TralaleroTralala", "BombardiroCrocodilo" },
+}
+
+-- Weighted draw inside the Mythic tier: the lake guardian is the most
+-- common Mythic; the bomber croc is the rarest catch in the game.
+FishDefinitions.MythicWeights = {
+	NagaNila = 40,
+	TungTungSahur = 25,
+	TralaleroTralala = 20,
+	BombardiroCrocodilo = 15,
 }
 
 -- All fish ids in rarity order (for the Brainrotpedia grid).
@@ -118,6 +155,9 @@ FishDefinitions.AllFishIds = {
 	"SidatSultan",
 	"BelutBarista",
 	"NagaNila",
+	"TungTungSahur",
+	"TralaleroTralala",
+	"BombardiroCrocodilo",
 }
 
 -- Returns the rarity tier one step above the given tier (Mythic stays Mythic).

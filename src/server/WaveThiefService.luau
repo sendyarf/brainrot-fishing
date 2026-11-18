@@ -8,7 +8,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PathfindingService = game:GetService("PathfindingService")
 
 local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
 local FishDefinitions = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishDefinitions"))
@@ -93,27 +92,17 @@ local function BuildThiefModel()
 	return model
 end
 
--- Walks the model to target along a pathfinding path (straight line if the
--- path fails). Returns false if the victim stopped being robbable mid-walk.
-local function WalkTo(model, target, victim)
-	local start = model.PrimaryPart.Position
-	local path = PathfindingService:CreatePath({
-		AgentRadius = 1.5,
-		AgentHeight = 5,
-		AgentCanJump = false,
-	})
-	local waypoints = nil
-	local ok = pcall(function()
-		path:ComputeAsync(start, target)
-	end)
-	if ok and path.Status == Enum.PathStatus.Success then
-		waypoints = path:GetWaypoints()
-	end
-	if not waypoints then
-		waypoints = { { Position = target } }
-	end
-	for _, wp in ipairs(waypoints) do
-		local dest = Vector3.new(wp.Position.X, start.Y, wp.Position.Z)
+-- Walks the model through a list of waypoints in order (straight legs).
+-- No pathfinder: the house aisles (2.4 studs) are narrower than the
+-- pathfinder's agent diameter, so it would fail and fall back to a straight
+-- line through the tables anyway. The thief's parts are CanCollide=false,
+-- so a straight leg can never get it stuck — and the waypoints route it
+-- down the center aisle and along the row aisle, so it never clips a
+-- table visually. Returns false if the victim stopped being robbable.
+local function WalkTo(model, waypoints, victim)
+	local startY = model.PrimaryPart.Position.Y
+	for _, target in ipairs(waypoints) do
+		local dest = Vector3.new(target.X, startY, target.Z)
 		while (model.PrimaryPart.Position - dest).Magnitude > 0.6 do
 			if not IsRobbable(victim) then
 				return false
@@ -126,7 +115,7 @@ local function WalkTo(model, target, victim)
 			dir = dir.Unit
 			local step = math.min(WALK_SPEED * 0.05, (dest - pos).Magnitude)
 			local newPos = pos + dir * step
-			local y = start.Y + math.sin(os.clock() * 4) * 0.2
+			local y = startY + math.sin(os.clock() * 4) * 0.2
 			model:PivotTo(CFrame.new(newPos.X, y, newPos.Z) * CFrame.Angles(0, math.atan2(dir.X, dir.Z), 0))
 			task.wait(0.05)
 		end
@@ -229,7 +218,13 @@ function WaveThiefService.SendThief(victim, trips)
 			end
 			local tankPos = TankService.GetTankPosition(victim, cheapestIndex)
 			local approach = Vector3.new(tankPos.X, 0.6, tankPos.Z - 4)
-			if not WalkTo(model, approach, victim) then
+			-- Into the house down the center aisle (x = baseX), then
+			-- sideways along the aisle in front of the tank's row. The
+			-- house front is open, so the entrance waypoint is just the
+			-- front wall line (baseZ - 12).
+			local entrance = Vector3.new(basePos.X, 0.6, basePos.Z - 12)
+			local aisle = Vector3.new(basePos.X, 0.6, approach.Z)
+			if not WalkTo(model, { entrance, aisle, approach }, victim) then
 				break
 			end
 			local facing = tankPos - model.PrimaryPart.Position
@@ -245,8 +240,9 @@ function WaveThiefService.SendThief(victim, trips)
 				})
 				DataService.BroadcastState(victim)
 			end
-			-- Walk back to the shore before the next trip (or to despawn).
-			if not WalkTo(model, spawnPos, victim) then
+			-- Walk back to the shore before the next trip (or to despawn):
+			-- sideways to the center aisle, then straight out the entrance.
+			if not WalkTo(model, { Vector3.new(basePos.X, 0.6, approach.Z), spawnPos }, victim) then
 				break
 			end
 		end

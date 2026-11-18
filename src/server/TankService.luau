@@ -26,7 +26,32 @@ local function GetTankCenter(player, tankIndex)
 	end
 	local plotCenter = GameConfig.BasePlots[data.PlotIndex] or GameConfig.BasePlots[1]
 	local anchor = GameConfig.TankAnchors[tankIndex] or Vector3.new(0, 0, 0)
-	return plotCenter + anchor + Vector3.new(0, 1.9, 0)
+	-- +3.75: the glass bottom (center - 1.95) sits on the 1.8-stud display
+	-- table in the house base. The old +1.9 put the tank on the floor.
+	return plotCenter + anchor + Vector3.new(0, 3.75, 0)
+end
+
+-- The farthest any part of a voxel model reaches from its pivot, in XZ.
+-- Voxel fish have no single "Body" part to measure, and the nose, tail
+-- and accessories stick out past the body block — so measure the real
+-- silhouette: for every part, the farthest corner from the pivot. Model
+-- parts are axis-aligned, so the 4 XZ corners are exact.
+local function GetModelReach(model)
+	local pivot = model:GetPivot().Position
+	local reach = 0
+	for _, part in ipairs(model:GetDescendants()) do
+		if part:IsA("BasePart") then
+			local rel = part.Position - pivot
+			local hx, hz = part.Size.X / 2, part.Size.Z / 2
+			for _, cx in ipairs({ -hx, hx }) do
+				for _, cz in ipairs({ -hz, hz }) do
+					local dx, dz = rel.X + cx, rel.Z + cz
+					reach = math.max(reach, math.sqrt(dx * dx + dz * dz))
+				end
+			end
+		end
+	end
+	return reach
 end
 
 -- Keeps the plot's owner sign showing the live tank count ("Tanks: 2/3").
@@ -155,15 +180,13 @@ local function CreateTankVisual(player, tankIndex, tank)
 		fishModel.Parent = folder
 		fishModel:PivotTo(CFrame.new(center))
 	end
-	-- Swim radius from the fish's body length, so long fish (eels, Naga)
-	-- stay inside the glass instead of poking through it. 2.5 is the
-	-- half-width of the 5-stud tank.
+	-- Swim radius from the fish's real silhouette (nose/tail/accessories),
+	-- so long fish (eels, Naga, the croc) stay inside the glass instead of
+	-- poking through it when they turn. 2.5 is the half-width of the
+	-- 5-stud tank; 0.1 is clearance for the glass.
 	local swimRadius = 0.45
 	if fishModel then
-		local body = fishModel:FindFirstChild("Body")
-		if body then
-			swimRadius = math.clamp(2.5 - math.max(body.Size.X, body.Size.Z) / 2, 0.12, 0.55)
-		end
+		swimRadius = math.clamp(2.5 - GetModelReach(fishModel) - 0.1, 0.12, 0.55)
 	end
 
 	local label = BuildTankLabel(glass, tank.FishId, tank.Mutation, income, locked, tankIndex)
@@ -383,9 +406,14 @@ RunService.Heartbeat:Connect(function(dt)
 				local yaw = -visual.Angle - math.pi / 2
 				model:PivotTo(CFrame.new(visual.Center + Vector3.new(x, y, z)) * CFrame.Angles(0, yaw, 0))
 				if visual.Mutation == "Rainbow" then
-					local body = model:FindFirstChild("Body")
-					if body then
-						body.Color = Color3.fromHSV((os.clock() * 0.15 + visual.BobPhase) % 1, 0.75, 1)
+					-- The body shimmers; fins and accessories keep their
+					-- colors. Every body run is named Body* (BodyMid,
+					-- BodyNose, BodyLog, BodyCroc, ...).
+					local hue = Color3.fromHSV((os.clock() * 0.15 + visual.BobPhase) % 1, 0.75, 1)
+					for _, part in ipairs(model:GetDescendants()) do
+						if part:IsA("BasePart") and part.Name:sub(1, 4) == "Body" then
+							part.Color = hue
+						end
 					end
 				end
 			end

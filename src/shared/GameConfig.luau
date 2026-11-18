@@ -127,7 +127,7 @@ GameConfig.ReelMissSpeedUp = 1.1 -- needle gets 10% faster after each Miss
 GameConfig.OverflowSellMultiplier = 100 -- tank-full catch sells for $/s x 100
 GameConfig.IncomeTickSeconds = 1
 GameConfig.AutosaveSeconds = 60
-GameConfig.CollectionBonus = 2000 -- catching all 9 fish
+GameConfig.CollectionBonus = 2000 -- catching all 12 fish
 GameConfig.OfflineEarningsCap = 5000
 GameConfig.OfflineEarningsRate = 0.5 -- 50% of income while away
 
@@ -153,15 +153,17 @@ for i = 1, 10 do
 	GameConfig.BasePlots[i] = Vector3.new(-153 + (i - 1) * 34, 0, 48)
 end
 
--- Tank anchors inside a plot: 2 rows of 6, local to the plot center.
--- Column-major order (down each column first) so the first tanks fill as a
--- grid, not a single row: with 4 tanks the base already looks 2x2. The old
--- row-major order filled row 1 first, so a base with 6 or fewer tanks
--- looked like one row. Columns are 5.2 apart for the 5-stud tanks.
+-- Tank anchors inside a plot: 3 rows of 4, local to the plot center.
+-- Row-major, front row first (z=-8 is nearest the entrance): the first
+-- tanks fill the row every visitor sees, and a base with 5 tanks already
+-- shows two rows. Columns leave a 4.4-stud center aisle (x -2.2..+2.2)
+-- between the inner pair so the player and the shadow thief can walk from
+-- the entrance to the back row; rows are 8 apart so the 2.4-stud aisles
+-- between the 5.6-stud display tables are walkable.
 GameConfig.TankAnchors = {}
-for col = 1, 6 do
-	for row = 1, 2 do
-		table.insert(GameConfig.TankAnchors, Vector3.new(-13 + (col - 1) * 5.2, 0, -3.5 + (row - 1) * 7))
+for _, rowZ in ipairs({ -8, 0, 8 }) do
+	for _, colX in ipairs({ -11.5, -5, 5, 11.5 }) do
+		table.insert(GameConfig.TankAnchors, Vector3.new(colX, 0, rowZ))
 	end
 end
 

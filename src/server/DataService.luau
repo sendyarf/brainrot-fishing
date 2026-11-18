@@ -188,7 +188,7 @@ function DataService.UpdateCollection(player, fishId, income)
 	if income > best then
 		data.Collection[fishId] = income
 	end
-	-- Full collection (9/9): +$2,000 and the Master Angler title.
+	-- Full collection (12/12): +$2,000 and the Master Angler title.
 	local count = 0
 	for _ in pairs(data.Collection) do
 		count = count + 1

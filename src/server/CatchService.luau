@@ -62,11 +62,30 @@ end
 
 -- Rolls one full catch: tier (spot table + luck), a fish inside the tier,
 -- and a mutation. luckPercent = rod luck + bait luck + blessing + Perfect hits.
+-- Mythic picks are weighted (Naga 40, Tung 25, Tralalero 20, Bombardiro 15);
+-- every other tier picks uniformly.
 function CatchService.RollCatch(spotId, luckPercent, mythicMult)
 	local tier = RollTier(spotId, mythicMult)
 	tier = CatchService.ApplyLuckBonus(tier, luckPercent)
 	local pool = FishDefinitions.FishByTier[tier] or FishDefinitions.FishByTier.Common
 	local fishId = pool[math.random(1, #pool)]
+	if tier == "Mythic" and FishDefinitions.MythicWeights then
+		local total = 0
+		for _, id in ipairs(pool) do
+			total = total + (FishDefinitions.MythicWeights[id] or 0)
+		end
+		if total > 0 then
+			local roll = math.random() * total
+			local acc = 0
+			for _, id in ipairs(pool) do
+				acc = acc + (FishDefinitions.MythicWeights[id] or 0)
+				if roll <= acc then
+					fishId = id
+					break
+				end
+			end
+		end
+	end
 	local mutation = CatchService.RollMutation()
 	return fishId, tier, mutation
 end

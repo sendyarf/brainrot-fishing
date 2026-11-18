@@ -76,31 +76,21 @@ local function MakeRock(parent, position, scale)
 	return rock
 end
 
--- A wooden sign post with a readable BillboardGui label. The board is BIG
--- (7 x 3.6 studs): a studs-sized BillboardGui shrinks with distance like a
--- real board, so a 4.4-stud board was unreadable at normal play distance.
--- Text stays exactly on the board (Size in studs = board size).
-local function MakeSign(parent, position, title, subtitle, titleColor)
-	local post = MakePart(parent, "SignPost", "Part", Vector3.new(0.6, 4.4, 0.6), position + Vector3.new(0, 2.2, 0), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
-	local board = MakePart(parent, "SignBoard", "Part", Vector3.new(7, 3.6, 0.3), position + Vector3.new(0, 5.2, 0), Color3.fromRGB(70, 45, 25), Enum.Material.WoodPlanks)
-	local gui = Instance.new("BillboardGui")
+-- Attaches a sign label ON a board's face (SurfaceGui), so the text reads
+-- as painted on the board — like the top-1 game's ROT RANCH sign — instead
+-- of floating in the air. The old BillboardGui plane sat at the board's
+-- center (inside the 0.3-thick board) with AlwaysOnTop, so the text
+-- rendered through everything and looked detached from the board. A
+-- SurfaceGui lives on the face itself: it is occluded like the board,
+-- readable only from the front, and never floats. `face` is the board
+-- face the text goes on (Front = +Z by default; the base sign faces the
+-- lake, so it uses Back).
+local function AttachSignLabel(board, title, subtitle, titleColor, face)
+	local gui = Instance.new("SurfaceGui")
 	gui.Name = "SignLabel"
-	-- Size in STUDS (Scale), not pixels: the label is exactly the board's
-	-- size (7 x 3.6), so the text sits ON the board and shrinks with
-	-- distance like the board does. A fromOffset size stays the same pixel
-	-- size on screen at any distance, which made every sign a giant wall
-	-- of floating text. MaxDistance hides far signs so the horizon stays clean.
-	gui.Size = UDim2.new(7, 0, 3.6, 0)
-	gui.StudsOffset = Vector3.new(0, 0, 0)
-	gui.MaxDistance = 120
-	-- AlwaysOnTop: the GUI plane sits at the board's center, INSIDE the
-	-- 0.3-thick board. With AlwaysOnTop off, the board's own front face
-	-- occludes the half of the text that falls behind it at any viewing
-	-- angle — every sign showed only its right half ("...ASE",
-	-- "...anks go here"). Rendering on top is the standard fix for
-	-- billboard signs; the text still sits on the board, it just can't be
-	-- eaten by the board itself.
-	gui.AlwaysOnTop = true
+	gui.Face = face or Enum.NormalId.Front
+	gui.PixelsPerStud = 50
+	gui.AlwaysOnTop = false
 	gui.Parent = board
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Name = "Title"
@@ -125,6 +115,16 @@ local function MakeSign(parent, position, title, subtitle, titleColor)
 	subLabel.TextScaled = true
 	subLabel.TextWrapped = true
 	subLabel.Parent = gui
+end
+
+-- A wooden sign post with a board whose text is painted on its face.
+-- The board is BIG (7 x 3.6 studs): a SurfaceGui shrinks with distance
+-- like a real board, so a 4.4-stud board was unreadable at normal play
+-- distance.
+local function MakeSign(parent, position, title, subtitle, titleColor, face)
+	local post = MakePart(parent, "SignPost", "Part", Vector3.new(0.6, 4.4, 0.6), position + Vector3.new(0, 2.2, 0), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
+	local board = MakePart(parent, "SignBoard", "Part", Vector3.new(7, 3.6, 0.3), position + Vector3.new(0, 5.2, 0), Color3.fromRGB(70, 45, 25), Enum.Material.WoodPlanks)
+	AttachSignLabel(board, title, subtitle, titleColor, face)
 	post.CanCollide = false
 	board.CanCollide = false
 	return board
@@ -208,30 +208,67 @@ local function BuildIsland(world, center, kind)
 	return island
 end
 
--- One player base plot: low wooden fence, a name sign, and tank anchor pads.
+-- One accent color per base (10 plots): the roof, the header beam and the
+-- display-table tops all wear it, so each base reads as its own colorful
+-- house from across the lake.
+local PlotColors = {
+	Color3.fromRGB(220, 60, 60), -- red
+	Color3.fromRGB(255, 140, 40), -- orange
+	Color3.fromRGB(255, 210, 60), -- yellow
+	Color3.fromRGB(80, 200, 80), -- green
+	Color3.fromRGB(60, 200, 180), -- teal
+	Color3.fromRGB(80, 140, 255), -- blue
+	Color3.fromRGB(170, 90, 255), -- purple
+	Color3.fromRGB(255, 120, 180), -- pink
+	Color3.fromRGB(170, 220, 60), -- lime
+	Color3.fromRGB(80, 220, 255), -- cyan
+}
+
+-- One player base plot: a small open-front house (cream walls, a slanted
+-- accent roof, a sign over the entrance) with 3 rows of display tables —
+-- the tanks sit ON the tables, not on the floor, so the base reads as a
+-- neat display room. The front is open (pillars + header only) so the
+-- player, the thief and the camera walk straight in, and the tanks are
+-- visible from the lake through the opening. The center aisle (x -2.2..2.2)
+-- runs front-to-back between the inner tables; the thief walks down it.
 local function BuildBasePlot(world, index, center)
 	local plot = Instance.new("Folder")
 	plot.Name = "BasePlot" .. index
 	plot.Parent = world
-	-- Grass pad under the plot (32 x 18: room for 2 rows of 5-stud tanks).
-	MakePart(plot, "PlotPad", "Part", Vector3.new(32, 0.4, 18), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(110, 190, 90), Enum.Material.Grass)
-	-- Wooden fence around three sides (open toward the lake). 4 studs tall
-	-- with corner posts: the old 2.5-stud fence looked like a garden edge
-	-- next to a 5-stud player.
-	MakePart(plot, "FenceBack", "Part", Vector3.new(32, 4, 0.4), center + Vector3.new(0, 2.2, 9), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceLeft", "Part", Vector3.new(0.4, 4, 18), center + Vector3.new(-16, 2.2, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceRight", "Part", Vector3.new(0.4, 4, 18), center + Vector3.new(16, 2.2, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	for _, sx in ipairs({ -1, 1 }) do
-		for _, sz in ipairs({ -1, 1 }) do
-			MakePart(plot, "FencePost" .. (sx < 0 and "L" or "R") .. (sz < 0 and "F" or "B"), "Part", Vector3.new(0.8, 4.6, 0.8), center + Vector3.new(sx * 16, 2.5, sz * 9), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
-		end
-	end
-	-- Owner sign (the name is filled in when a player claims the plot).
-	local sign = MakeSign(plot, center + Vector3.new(0, 0, 10.5), "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170))
-	sign.Name = "OwnerSign"
-	-- Tank anchor pads (12): small stone slabs the glass tanks sit on.
+	local accent = PlotColors[((index - 1) % #PlotColors) + 1]
+	local wallColor = Color3.fromRGB(245, 240, 225)
+	local woodDark = Color3.fromRGB(120, 85, 50)
+	-- Wooden floor (32 x 24: room for 3 rows of tables + walkable aisles).
+	MakePart(plot, "PlotPad", "Part", Vector3.new(32, 0.4, 24), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(170, 130, 85), Enum.Material.WoodPlanks)
+	-- Walls: back + two sides, 7.5 tall, sitting on the floor (top at 0.4).
+	MakePart(plot, "WallBack", "Part", Vector3.new(32, 7.5, 0.4), center + Vector3.new(0, 4.15, 12), wallColor)
+	MakePart(plot, "WallLeft", "Part", Vector3.new(0.4, 7.5, 24), center + Vector3.new(-16, 4.15, 0), wallColor)
+	MakePart(plot, "WallRight", "Part", Vector3.new(0.4, 7.5, 24), center + Vector3.new(16, 4.15, 0), wallColor)
+	-- Front pillars + header beam (accent) over the open entrance.
+	MakePart(plot, "PillarL", "Part", Vector3.new(1, 7.5, 1), center + Vector3.new(-16, 4.15, -12), woodDark, Enum.Material.Wood)
+	MakePart(plot, "PillarR", "Part", Vector3.new(1, 7.5, 1), center + Vector3.new(16, 4.15, -12), woodDark, Enum.Material.Wood)
+	MakePart(plot, "HeaderBeam", "Part", Vector3.new(32, 1.2, 0.8), center + Vector3.new(0, 7.2, -12), accent)
+	-- Slanted roof: two 13-deep slabs at 15 degrees meeting at a ridge
+	-- (y ~11.3), eaves at y ~7.9 just above the wall tops (7.9). Each
+	-- slab's horizontal reach is 13*cos(15) = 12.56, so the roof covers
+	-- the full 24-deep house and overhangs the walls a little on every
+	-- side. Front slab tilts -15 (ridge end up), back slab +15.
+	local roofFront = MakePart(plot, "RoofFront", "Part", Vector3.new(33, 0.3, 13), center + Vector3.new(0, 9.58, -6), accent)
+	roofFront.CFrame = CFrame.new(center + Vector3.new(0, 9.58, -6)) * CFrame.Angles(math.rad(-15), 0, 0)
+	local roofBack = MakePart(plot, "RoofBack", "Part", Vector3.new(33, 0.3, 13), center + Vector3.new(0, 9.58, 6), accent)
+	roofBack.CFrame = CFrame.new(center + Vector3.new(0, 9.58, 6)) * CFrame.Angles(math.rad(15), 0, 0)
+	MakePart(plot, "RoofRidge", "Part", Vector3.new(33, 0.5, 0.5), center + Vector3.new(0, 11.3, 0), accent)
+	-- Owner sign hanging on the header, facing the lake (Back face = -Z).
+	-- Its bottom (5.65) clears a 5-stud player walking in; the name is
+	-- filled in when a player claims the plot.
+	local signBoard = MakePart(plot, "OwnerSign", "Part", Vector3.new(10, 2.5, 0.3), center + Vector3.new(0, 6.9, -12.6), Color3.fromRGB(70, 45, 25), Enum.Material.WoodPlanks)
+	signBoard.CanCollide = false
+	AttachSignLabel(signBoard, "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170), Enum.NormalId.Back)
+	-- Display tables (12): a pedestal + an accent top. The tank glass
+	-- sits on the top (y 1.8) — see TankService.GetTankCenter (+3.75).
 	for i, offset in ipairs(GameConfig.TankAnchors) do
-		MakePart(plot, "TankPad" .. i, "Part", Vector3.new(5.2, 0.3, 5.2), center + offset + Vector3.new(0, 0.55, 0), Color3.fromRGB(200, 200, 210), Enum.Material.Slate)
+		MakePart(plot, "TablePedestal" .. i, "Part", Vector3.new(1.5, 1.1, 1.5), center + offset + Vector3.new(0, 0.95, 0), woodDark, Enum.Material.Wood)
+		MakePart(plot, "TableTop" .. i, "Part", Vector3.new(5.6, 0.3, 5.6), center + offset + Vector3.new(0, 1.65, 0), accent)
 	end
 	return plot
 end
@@ -377,16 +414,18 @@ function WorldBuilder.BuildWorld()
 		BuildBasePlot(world, i, center)
 	end
 
-	-- Trees: a colorful mix along the shore and on the meadow.
+	-- Trees: a colorful mix along the shore and on the meadow. The plots
+	-- are 24 deep (z 36..60), so no tree stands inside a house: the row
+	-- behind the houses is at z 68, the shore row at z 30-35.
 	local treeSpots = {
 		{ Vector3.new(-30, 0, 35), 1.2, Color3.fromRGB(60, 170, 80) },
-		{ Vector3.new(-48, 0, 60), 1.4, Color3.fromRGB(255, 150, 180) },
+		{ Vector3.new(-48, 0, 68), 1.4, Color3.fromRGB(255, 150, 180) },
 		{ Vector3.new(-80, 0, 30), 1.1, Color3.fromRGB(70, 180, 90) },
-		{ Vector3.new(-105, 0, 55), 1.5, Color3.fromRGB(255, 200, 90) },
-		{ Vector3.new(30, 0, 36), 1.3, Color3.fromRGB(60, 170, 80) },
-		{ Vector3.new(52, 0, 62), 1.1, Color3.fromRGB(255, 150, 180) },
+		{ Vector3.new(-105, 0, 68), 1.5, Color3.fromRGB(255, 200, 90) },
+		{ Vector3.new(30, 0, 30), 1.3, Color3.fromRGB(60, 170, 80) },
+		{ Vector3.new(52, 0, 68), 1.1, Color3.fromRGB(255, 150, 180) },
 		{ Vector3.new(84, 0, 32), 1.4, Color3.fromRGB(70, 180, 90) },
-		{ Vector3.new(108, 0, 58), 1.2, Color3.fromRGB(255, 200, 90) },
+		{ Vector3.new(108, 0, 68), 1.2, Color3.fromRGB(255, 200, 90) },
 		{ Vector3.new(-120, 0, -10), 1.5, Color3.fromRGB(60, 170, 80) },
 		{ Vector3.new(120, 0, -12), 1.3, Color3.fromRGB(70, 180, 90) },
 		{ Vector3.new(-60, 0, 85), 1.2, Color3.fromRGB(255, 150, 180) },

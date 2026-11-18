@@ -50,7 +50,7 @@ function HelpClient.Init()
 	helpPanel = UIHelpers.NewPanel(gui, "HelpPanel", UIHelpers.FitPanelSize(560, 460), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
 	UIHelpers.NewLabel(helpPanel, "HelpTitle", "HOW TO PLAY", UDim2.new(1, -32, 0, 32), UDim2.new(0, 16, 0, 12), 26, UIHelpers.AccentGold).TextXAlignment = Enum.TextXAlignment.Center
 	-- The goal, up front: players asked what the game is about beyond fishing.
-	local goal = UIHelpers.NewLabel(helpPanel, "GoalLine", "GOAL: grow your $/s income, catch all 9 fish, and become the MASTER ANGLER — while thieves and Naga Nila try to steal your tanks!", UDim2.new(1, -32, 0, 36), UDim2.new(0, 16, 0, 46), 15, UIHelpers.AccentGreen)
+	local goal = UIHelpers.NewLabel(helpPanel, "GoalLine", "GOAL: grow your $/s income, catch all 12 fish, and become the MASTER ANGLER — while thieves and Naga Nila try to steal your tanks!", UDim2.new(1, -32, 0, 36), UDim2.new(0, 16, 0, 46), 15, UIHelpers.AccentGreen)
 	goal.TextWrapped = true
 	goal.TextXAlignment = Enum.TextXAlignment.Center
 	local stepsFrame = Instance.new("ScrollingFrame")
