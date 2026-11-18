@@ -59,7 +59,16 @@ end
 function UIHelpers.FitPanelSize(width, height)
 	local camera = game:GetService("Workspace").CurrentCamera
 	local view = camera and camera.ViewportSize or Vector2.new(1024, 600)
-	return UDim2.fromOffset(math.min(width, view.X - 24), math.min(height, view.Y - 24))
+	-- At client start the viewport can still be (0,0) (camera not rendered
+	-- yet): that made every modal 0x0 in fix 6 — only a stray X and title
+	-- fragment showed. Fall back to a sane size, and never go below a
+	-- usable minimum.
+	if view.X < 100 or view.Y < 100 then
+		view = Vector2.new(1024, 600)
+	end
+	return UDim2.fromOffset(
+		math.clamp(math.min(width, view.X - 24), 300, width),
+		math.clamp(math.min(height, view.Y - 24), 200, height))
 end
 
 -- A bold text label (transparent background).

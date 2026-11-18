@@ -116,6 +116,9 @@ end
 function BrainrotpediaClient.Toggle()
 	isOpen = not isOpen
 	if isOpen then
+		if panel then
+			panel.Size = UIHelpers.FitPanelSize(640, 480)
+		end
 		RefreshDex()
 	end
 	if panel then

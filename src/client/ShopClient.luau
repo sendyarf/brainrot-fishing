@@ -159,6 +159,11 @@ end
 function ShopClient.Toggle()
 	isOpen = not isOpen
 	if isOpen then
+		-- Re-fit every time the panel opens: the viewport is guaranteed
+		-- valid now, even if it was (0,0) when the panel was created.
+		if panel then
+			panel.Size = UIHelpers.FitPanelSize(660, 480)
+		end
 		RefreshShop()
 	end
 	if panel then

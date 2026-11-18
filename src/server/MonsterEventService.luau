@@ -13,6 +13,7 @@ local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 local FishDefinitions = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishDefinitions"))
 local DataService = require(script.Parent:WaitForChild("DataService"))
 local TankService = require(script.Parent:WaitForChild("TankService"))
+local WaveThiefService = require(script.Parent:WaitForChild("WaveThiefService"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local MonsterState = require(script.Parent:WaitForChild("MonsterState"))
 
@@ -28,8 +29,10 @@ local function GetRootPosition(player)
 	return root and root.Position or nil
 end
 
--- Each unlocked, unguarded tank has a 25% chance to lose its cheapest fish.
--- Locked tanks and tanks whose owner is within 15 studs of their base are safe.
+-- Each unlocked, unguarded tank has a 25% chance to be robbed. The theft is
+-- no longer instant: a shadow thief walks in from the lake and channels on
+-- the tank, so the owner can see it coming and save the fish by guarding
+-- or locking the base before the channel finishes.
 function MonsterEventService.RaidUnlockedTanks()
 	for _, player in ipairs(Players:GetPlayers()) do
 		local data = DataService.GetData(player)
@@ -38,21 +41,15 @@ function MonsterEventService.RaidUnlockedTanks()
 			local playerPos = GetRootPosition(player)
 			local guarding = playerPos and (playerPos - basePos).Magnitude <= GameConfig.MonsterGuardRadius
 			if not guarding then
+				local trips = 0
 				for _ = 1, #data.Tanks do
-					-- One raid roll per tank, cheapest fish first.
 					if math.random() < GameConfig.MonsterRaidChance then
-						local cheapestIndex = TankService.GetCheapestTankIndex(player)
-						if cheapestIndex then
-							local lost = TankService.RemoveFishFromTank(player, cheapestIndex)
-							if lost then
-								local def = FishDefinitions.Fish[lost.FishId]
-								GetRemote("MonsterEvent"):FireClient(player, "raided", {
-									FishName = def and def.Name or "Fish",
-								})
-								DataService.BroadcastState(player)
-							end
-						end
+						trips = trips + 1
 					end
+				end
+				trips = math.min(trips, 3)
+				if trips > 0 then
+					WaveThiefService.SendThief(player, trips)
 				end
 			end
 		end

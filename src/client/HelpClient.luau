@@ -23,6 +23,7 @@ local STEPS = {
 
 function HelpClient.Show()
 	if helpPanel then
+		helpPanel.Size = UIHelpers.FitPanelSize(560, 460)
 		helpPanel.Visible = true
 	end
 end
@@ -35,6 +36,9 @@ end
 
 function HelpClient.Toggle()
 	if helpPanel then
+		if not helpPanel.Visible then
+			helpPanel.Size = UIHelpers.FitPanelSize(560, 460)
+		end
 		helpPanel.Visible = not helpPanel.Visible
 	end
 end

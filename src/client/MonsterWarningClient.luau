@@ -54,14 +54,15 @@ function MonsterWarningClient.Init()
 	tint.Active = false
 	tint.Parent = gui
 
-	-- Banner under the cash panel.
-	banner = UIHelpers.NewPanel(gui, "MonsterBanner", UDim2.fromOffset(560, 76), UDim2.new(0.5, 0, 0, 124), Vector2.new(0.5, 0))
+	-- Slim one-line strip under the cash panel. The old 560x76 two-line
+	-- banner overlapped the reel minigame on short viewports and felt huge.
+	banner = UIHelpers.NewPanel(gui, "MonsterBanner", UDim2.fromOffset(540, 40), UDim2.new(0.5, 0, 0, 100), Vector2.new(0.5, 0))
 	banner.BackgroundColor3 = Color3.fromRGB(60, 15, 15)
 	banner.Visible = false
-	bannerTitle = UIHelpers.NewLabel(banner, "Title", "THE LAKE STIRS...", UDim2.new(1, -16, 0.55, 0), UDim2.new(0, 8, 0, 4), 24, Color3.fromRGB(255, 120, 120))
-	bannerTitle.TextXAlignment = Enum.TextXAlignment.Center
-	bannerSub = UIHelpers.NewLabel(banner, "Sub", "", UDim2.new(1, -16, 0.4, 0), UDim2.new(0, 8, 0.55, 0), 16, UIHelpers.TextWhite)
-	bannerSub.TextXAlignment = Enum.TextXAlignment.Center
+	bannerTitle = UIHelpers.NewLabel(banner, "Title", "THE LAKE STIRS...", UDim2.fromOffset(180, 40), UDim2.new(0, 10, 0, 0), 18, Color3.fromRGB(255, 120, 120))
+	bannerTitle.TextXAlignment = Enum.TextXAlignment.Left
+	bannerSub = UIHelpers.NewLabel(banner, "Sub", "", UDim2.new(1, -200, 1, 0), UDim2.new(0, 190, 0, 0), 15, UIHelpers.TextWhite)
+	bannerSub.TextXAlignment = Enum.TextXAlignment.Left
 
 	GetRemote("MonsterEvent").OnClientEvent:Connect(function(kind, data)
 		data = data or {}
@@ -85,7 +86,7 @@ function MonsterWarningClient.Init()
 			StopCountdown()
 			bannerTitle.Text = "The lake calms..."
 			bannerTitle.TextColor3 = UIHelpers.AccentGreen
-			bannerSub.Text = "Calm Water Blessing: +10% luck for 60 seconds!"
+			bannerSub.Text = "Calm Water Blessing: +10% luck, 60s!"
 			banner.BackgroundColor3 = Color3.fromRGB(15, 50, 25)
 			tint.BackgroundTransparency = 1
 			banner.Visible = true
@@ -93,7 +94,7 @@ function MonsterWarningClient.Init()
 				banner.Visible = false
 			end)
 		elseif kind == "raided" then
-			UIHelpers.ShowToast("The monster raided your tank! Lost " .. (data.FishName or "a fish") .. ".", UIHelpers.AccentRed, 5)
+			UIHelpers.ShowToast("A shadow thief stole your " .. (data.FishName or "fish") .. "!", UIHelpers.AccentRed, 5)
 		end
 	end)
 end

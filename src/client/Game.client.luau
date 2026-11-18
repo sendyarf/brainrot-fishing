@@ -21,6 +21,23 @@ gui.IgnoreGuiInset = true
 gui.DisplayOrder = 10
 gui.Parent = playerGui
 
+-- Hide the default backpack hotbar: the fishing rod is a Tool, so Roblox
+-- shows its hotbar slot at the bottom-center, overlapping our SHOP button.
+-- The rod auto-equips and casting is E, so the hotbar is pure clutter.
+-- SetCoreGuiEnabled can fail if called too early, hence the retry loop.
+task.spawn(function()
+	local StarterGui = game:GetService("StarterGui")
+	for _ = 1, 5 do
+		local ok = pcall(function()
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+		end)
+		if ok then
+			break
+		end
+		task.wait(1)
+	end
+end)
+
 -- On-screen boot error readout (hidden unless a module fails to start).
 local errorLabel = Instance.new("TextLabel")
 errorLabel.Name = "BootErrorLabel"

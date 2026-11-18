@@ -84,6 +84,9 @@ end
 function QuestClient.Toggle()
 	isOpen = not isOpen
 	if isOpen then
+		if panel then
+			panel.Size = UIHelpers.FitPanelSize(560, 380)
+		end
 		RefreshQuests()
 	end
 	if panel then

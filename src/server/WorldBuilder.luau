@@ -216,9 +216,9 @@ local function BuildBasePlot(world, index, center)
 	-- Grass pad under the plot (28 x 18: room for 2 rows of big tanks).
 	MakePart(plot, "PlotPad", "Part", Vector3.new(28, 0.4, 18), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(110, 190, 90), Enum.Material.Grass)
 	-- Low wooden fence around three sides (open toward the lake).
-	MakePart(plot, "FenceBack", "Part", Vector3.new(28, 1.2, 0.4), center + Vector3.new(0, 0.8, 9), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceLeft", "Part", Vector3.new(0.4, 1.2, 18), center + Vector3.new(-14, 0.8, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceRight", "Part", Vector3.new(0.4, 1.2, 18), center + Vector3.new(14, 0.8, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceBack", "Part", Vector3.new(28, 2.5, 0.4), center + Vector3.new(0, 1.45, 9), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceLeft", "Part", Vector3.new(0.4, 2.5, 18), center + Vector3.new(-14, 1.45, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceRight", "Part", Vector3.new(0.4, 2.5, 18), center + Vector3.new(14, 1.45, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
 	-- Owner sign (the name is filled in when a player claims the plot).
 	local sign = MakeSign(plot, center + Vector3.new(0, 0, 10.5), "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170))
 	sign.Name = "OwnerSign"
