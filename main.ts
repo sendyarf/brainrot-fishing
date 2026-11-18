@@ -1,3 +1,10 @@
+// Brainrot Fishing — "Brainrot Fishing: 9 Original Fish, Lake Monster, Steal & Rebirth".
+// A 3D sunset-lake fishing game: cast from the pier, win the reel minigame, fill your
+// glass aquarium, steal from rivals, lock your base, survive the Naga Nila lake monster,
+// and rebirth for permanent income multipliers. Built Rojo-first from src/ (see the
+// dossier for the full service list). This entry's main.ts was authored for the game;
+// the kit's starter comment below still describes how the handoff works.
+//
 // A working roblox-brainrot-01 entry (Node 22, standard library only): the game is this directory's Rojo
 // project, built into game.rbxl with `rojo build default.project.json --output game.rbxl`, and the program
 // hands it in. It copies game.rbxl, src/, screenshots/ and PLAY.json from beside this file to /output and
@@ -20,6 +27,8 @@ import { buildDossier } from './vendor/makefun-roblox.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+
+console.log('Brainrot Fishing: handing in game.rbxl, src/, screenshots/ and PLAY.json.');
 
 /** cpSync's filter: leave out every file and directory whose name starts with a dot (.gitkeep, .DS_Store, .git). */
 const notDotted = (path: string): boolean => !basename(path).startsWith('.');
