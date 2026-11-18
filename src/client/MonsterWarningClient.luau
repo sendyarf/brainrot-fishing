@@ -72,7 +72,7 @@ function MonsterWarningClient.Init()
 			tint.BackgroundColor3 = Color3.fromRGB(120, 60, 20)
 			tint.BackgroundTransparency = 0.88
 			banner.Visible = true
-			StartCountdown(data.Seconds or 15, "Naga Nila is coming!")
+			StartCountdown(data.Seconds or 15, "Look at the lake — Naga Nila is coming!")
 		elseif kind == "active" then
 			bannerTitle.Text = "NAGA NILA STIRS!"
 			bannerTitle.TextColor3 = Color3.fromRGB(255, 90, 90)

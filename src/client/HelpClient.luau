@@ -13,7 +13,7 @@ local gui = nil
 local helpPanel = nil
 
 local STEPS = {
-	"1.  Walk to the glowing water at Shallow Shore — it's right in front of you when you spawn.",
+	"1.  Walk to the glowing water at Shallow Shore — follow the light beam rising from the water, right in front of you when you spawn.",
 	"2.  Press E to cast. When a fish bites, press E (or tap REEL) while the needle is in the GREEN zone. 3 points lands the fish!",
 	"3.  Caught fish swim in your tanks and earn $ every second — even while you explore.",
 	"4.  Spend $ in the SHOP: better rods, tastier bait, more tank slots, and new fishing spots.",

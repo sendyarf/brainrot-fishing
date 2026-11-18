@@ -19,6 +19,8 @@ local FishingClient = {}
 local player = Players.LocalPlayer
 local gui = nil
 local promptLabel = nil
+local arrowLabel = nil
+local arrowNameLabel = nil
 local reelFrame = nil
 local needle = nil
 local perfectZone = nil
@@ -141,6 +143,87 @@ local function FindNearestSpot()
 		end
 	end
 	return nil, false
+end
+
+-- The nearest spot the player actually owns (Shallow is always owned).
+-- The wayfinding arrow points here, so it always leads somewhere fishable.
+local function FindNearestOwnedSpot()
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return nil
+	end
+	local state = ClientState.Get()
+	local bestId = nil
+	local bestDist = math.huge
+	for _, spotId in ipairs(GameConfig.SpotOrder) do
+		local spot = GameConfig.Spots[spotId]
+		local owned = false
+		if spotId == "Shallow" then
+			owned = true
+		elseif spotId == "Royal" then
+			owned = state.Rebirths >= 1
+		else
+			owned = state.Spots and state.Spots[spotId] or false
+		end
+		if owned then
+			local dist = (root.Position - spot.Position).Magnitude
+			if dist < bestDist then
+				bestDist = dist
+				bestId = spotId
+			end
+		end
+	end
+	return bestId
+end
+
+-- Rotates the wayfinding arrow toward a spot, relative to the camera:
+-- 0 = straight ahead, +90 = to the right, 180 = behind. Only the ▲ glyph
+-- rotates — the spot name above it always stays readable.
+local function PointArrowAt(spotId)
+	if not arrowLabel or not arrowNameLabel then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local camera = game:GetService("Workspace").CurrentCamera
+	if not root or not camera or not spotId then
+		arrowLabel.Visible = false
+		arrowNameLabel.Visible = false
+		return
+	end
+	local spot = GameConfig.Spots[spotId]
+	local toSpot = spot.Position - root.Position
+	toSpot = Vector3.new(toSpot.X, 0, toSpot.Z)
+	if toSpot.Magnitude < 1 then
+		arrowLabel.Visible = false
+		arrowNameLabel.Visible = false
+		return
+	end
+	toSpot = toSpot.Unit
+	local camLook = camera.CFrame.LookVector
+	camLook = Vector3.new(camLook.X, 0, camLook.Z)
+	if camLook.Magnitude < 0.01 then
+		arrowLabel.Visible = false
+		arrowNameLabel.Visible = false
+		return
+	end
+	camLook = camLook.Unit
+	local crossY = camLook.Z * toSpot.X - camLook.X * toSpot.Z
+	local dot = camLook.X * toSpot.X + camLook.Z * toSpot.Z
+	arrowNameLabel.Text = spot.Name
+	arrowLabel.Rotation = math.deg(math.atan2(-crossY, dot))
+	arrowLabel.Visible = true
+	arrowNameLabel.Visible = true
+end
+
+local function HideArrow()
+	if arrowLabel then
+		arrowLabel.Visible = false
+	end
+	if arrowNameLabel then
+		arrowNameLabel.Visible = false
+	end
 end
 
 local RemoveBobber
@@ -308,9 +391,20 @@ function FishingClient.Init()
 	gui = player:WaitForChild("PlayerGui"):WaitForChild("BrainrotFishingGui")
 
 	-- Cast prompt, bottom-center.
-	promptLabel = UIHelpers.NewLabel(gui, "CastPrompt", "", UDim2.fromOffset(480, 36), UDim2.new(0.5, 0, 1, -180), 20, UIHelpers.TextWhite, Vector2.new(0.5, 0))
+	promptLabel = UIHelpers.NewLabel(gui, "CastPrompt", "", UDim2.fromOffset(640, 36), UDim2.new(0.5, 0, 1, -180), 20, UIHelpers.TextWhite, Vector2.new(0.5, 0))
 	promptLabel.TextXAlignment = Enum.TextXAlignment.Center
 	promptLabel.Visible = false
+
+	-- Wayfinding arrow, above the prompt: the ▲ points at the nearest owned
+	-- fishing spot (name above it, never rotated) whenever the player is
+	-- nowhere near water, so "walk to the glowing water" always has both
+	-- a direction and a destination.
+	arrowNameLabel = UIHelpers.NewLabel(gui, "SpotArrowName", "", UDim2.fromOffset(320, 26), UDim2.new(0.5, 0, 1, -252), 18, UIHelpers.AccentGold, Vector2.new(0.5, 0))
+	arrowNameLabel.TextXAlignment = Enum.TextXAlignment.Center
+	arrowNameLabel.Visible = false
+	arrowLabel = UIHelpers.NewLabel(gui, "SpotArrow", "▲", UDim2.fromOffset(48, 36), UDim2.new(0.5, 0, 1, -224), 28, UIHelpers.AccentGold, Vector2.new(0.5, 0))
+	arrowLabel.TextXAlignment = Enum.TextXAlignment.Center
+	arrowLabel.Visible = false
 
 	-- Reel minigame frame, bottom-center.
 	reelFrame = UIHelpers.NewPanel(gui, "ReelFrame", UDim2.fromOffset(520, 130), UDim2.new(0.5, 0, 1, -160), Vector2.new(0.5, 1))
@@ -389,19 +483,24 @@ function FishingClient.Init()
 						promptLabel.TextColor3 = UIHelpers.AccentGold
 					end
 					promptLabel.Visible = true
+					HideArrow()
 				else
-					-- Never leave a new player guessing: if no spot is near,
-					-- say where to go instead of hiding the prompt.
-					promptLabel.Text = "Walk to the glowing water to fish — then press E!"
+					-- No spot nearby: this is a TIP, not a quest — say so,
+					-- point at the nearest water with the arrow, and name
+					-- the light beam the player can actually see.
+					promptLabel.Text = "TIP: Follow the light beam to the water — press E to fish!"
 					promptLabel.TextColor3 = UIHelpers.TextDim
 					promptLabel.Visible = true
+					PointArrowAt(FindNearestOwnedSpot())
 				end
 			elseif fishingPhase == "Waiting" then
 				promptLabel.Text = "Waiting for a bite..."
 				promptLabel.TextColor3 = UIHelpers.TextDim
 				promptLabel.Visible = true
+				HideArrow()
 			else
 				promptLabel.Visible = false
+				HideArrow()
 			end
 		end
 	end)

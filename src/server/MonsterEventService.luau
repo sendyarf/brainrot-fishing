@@ -69,6 +69,9 @@ local function SetMonsterVisible(shadowOnly, fullyVisible)
 	parts.Fin.Transparency = fullyVisible and 0 or 1
 	parts.EyeLeft.Transparency = fullyVisible and 0 or 1
 	parts.EyeRight.Transparency = fullyVisible and 0 or 1
+	if parts.Glow then
+		parts.Glow.Enabled = fullyVisible
+	end
 end
 
 -- Darkens the sky for the warning/event, restores it after.

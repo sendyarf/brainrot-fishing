@@ -76,20 +76,23 @@ local function MakeRock(parent, position, scale)
 	return rock
 end
 
--- A floating sign post with a readable BillboardGui label.
+-- A wooden sign post with a readable BillboardGui label. The board is BIG
+-- (7 x 3.6 studs): a studs-sized BillboardGui shrinks with distance like a
+-- real board, so a 4.4-stud board was unreadable at normal play distance.
+-- Text stays exactly on the board (Size in studs = board size).
 local function MakeSign(parent, position, title, subtitle, titleColor)
-	local post = MakePart(parent, "SignPost", "Part", Vector3.new(0.6, 3.4, 0.6), position + Vector3.new(0, 1.7, 0), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
-	local board = MakePart(parent, "SignBoard", "Part", Vector3.new(4.4, 2.4, 0.3), position + Vector3.new(0, 4.2, 0), Color3.fromRGB(90, 60, 35), Enum.Material.WoodPlanks)
+	local post = MakePart(parent, "SignPost", "Part", Vector3.new(0.6, 4.4, 0.6), position + Vector3.new(0, 2.2, 0), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
+	local board = MakePart(parent, "SignBoard", "Part", Vector3.new(7, 3.6, 0.3), position + Vector3.new(0, 5.2, 0), Color3.fromRGB(70, 45, 25), Enum.Material.WoodPlanks)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "SignLabel"
 	-- Size in STUDS (Scale), not pixels: the label is exactly the board's
-	-- size (4.4 x 2.4), so the text sits ON the board and shrinks with
+	-- size (7 x 3.6), so the text sits ON the board and shrinks with
 	-- distance like the board does. A fromOffset size stays the same pixel
 	-- size on screen at any distance, which made every sign a giant wall
 	-- of floating text. MaxDistance hides far signs so the horizon stays clean.
-	gui.Size = UDim2.new(4.4, 0, 2.4, 0)
+	gui.Size = UDim2.new(7, 0, 3.6, 0)
 	gui.StudsOffset = Vector3.new(0, 0, 0)
-	gui.MaxDistance = 80
+	gui.MaxDistance = 120
 	gui.AlwaysOnTop = false
 	gui.Parent = board
 	local titleLabel = Instance.new("TextLabel")
@@ -101,6 +104,7 @@ local function MakeSign(parent, position, title, subtitle, titleColor)
 	titleLabel.TextSize = 30
 	titleLabel.Font = Enum.Font.GothamBold
 	titleLabel.TextScaled = true
+	titleLabel.TextWrapped = true
 	titleLabel.Parent = gui
 	local subLabel = Instance.new("TextLabel")
 	subLabel.Name = "Subtitle"
@@ -112,6 +116,7 @@ local function MakeSign(parent, position, title, subtitle, titleColor)
 	subLabel.TextSize = 20
 	subLabel.Font = Enum.Font.GothamBold
 	subLabel.TextScaled = true
+	subLabel.TextWrapped = true
 	subLabel.Parent = gui
 	post.CanCollide = false
 	board.CanCollide = false
@@ -215,28 +220,41 @@ local function BuildBasePlot(world, index, center)
 	return plot
 end
 
--- The lake monster's hidden parts: a dark shadow under the deep water,
--- a fin and two glowing eyes that rise during the event.
+-- The lake monster's hidden parts: a dark shadow on the deep water, a fin
+-- and two glowing eyes that rise during the event. They live MID-LAKE
+-- (x = 18, z = -45), east of the pier, ~60 studs from the shore — the old
+-- spot at z = -80 was 100+ studs from every player, so the 4-stud fin and
+-- 1.4-stud eyes were invisible and the event looked like nothing happened
+-- (the blessing after it proved it HAD run). Big fin, big eyes, a red glow
+-- light, and the shadow sitting ON the water surface (y = 0.5, above the
+-- lake top at 0.3) so the monster is unmissable when it stirs.
 local function BuildMonster(world)
 	local folder = Instance.new("Folder")
 	folder.Name = "LakeMonster"
 	folder.Parent = world
-	local shadow = MakePart(folder, "MonsterShadow", "Part", Vector3.new(30, 0.4, 16), Vector3.new(0, 0.3, -80), Color3.fromRGB(10, 20, 40), Enum.Material.SmoothPlastic)
+	local shadow = MakePart(folder, "MonsterShadow", "Part", Vector3.new(36, 0.4, 20), Vector3.new(18, 0.5, -43), Color3.fromRGB(10, 20, 40), Enum.Material.SmoothPlastic)
 	shadow.Shape = Enum.PartType.Ball
 	shadow.Transparency = 1
 	shadow.CanCollide = false
-	local fin = MakePart(folder, "MonsterFin", "WedgePart", Vector3.new(4, 6, 1), Vector3.new(0, 1.5, -80), Color3.fromRGB(20, 120, 70), Enum.Material.SmoothPlastic)
+	local fin = MakePart(folder, "MonsterFin", "WedgePart", Vector3.new(8, 12, 1.5), Vector3.new(18, 3, -45), Color3.fromRGB(20, 120, 70), Enum.Material.SmoothPlastic)
 	fin.Transparency = 1
 	fin.CanCollide = false
-	local eyeLeft = MakePart(folder, "MonsterEyeLeft", "Part", Vector3.new(1.4, 1.4, 1.4), Vector3.new(-2.5, 1, -74), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
+	local eyeLeft = MakePart(folder, "MonsterEyeLeft", "Part", Vector3.new(3, 3, 3), Vector3.new(15, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
 	eyeLeft.Shape = Enum.PartType.Ball
 	eyeLeft.Transparency = 1
 	eyeLeft.CanCollide = false
-	local eyeRight = MakePart(folder, "MonsterEyeRight", "Part", Vector3.new(1.4, 1.4, 1.4), Vector3.new(2.5, 1, -74), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
+	local eyeRight = MakePart(folder, "MonsterEyeRight", "Part", Vector3.new(3, 3, 3), Vector3.new(21, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
 	eyeRight.Shape = Enum.PartType.Ball
 	eyeRight.Transparency = 1
 	eyeRight.CanCollide = false
-	monsterParts = { Shadow = shadow, Fin = fin, EyeLeft = eyeLeft, EyeRight = eyeRight }
+	local glow = Instance.new("PointLight")
+	glow.Name = "MonsterGlow"
+	glow.Color = Color3.fromRGB(255, 60, 40)
+	glow.Brightness = 3
+	glow.Range = 40
+	glow.Enabled = false
+	glow.Parent = fin
+	monsterParts = { Shadow = shadow, Fin = fin, EyeLeft = eyeLeft, EyeRight = eyeRight, Glow = glow }
 end
 
 -- A small wooden rowboat floating near the pier.
@@ -267,13 +285,26 @@ function WorldBuilder.BuildWorld()
 	lake.CanCollide = false
 	-- Sandy shore strip where the lake meets the land.
 	MakePart(world, "ShoreSand", "Part", Vector3.new(200, 0.5, 22), Vector3.new(0, 0.1, 20), Color3.fromRGB(235, 215, 160), Enum.Material.Sand)
-	-- Colored water patches mark each fishing spot's depth.
+	-- Glowing water patches mark each fishing spot's depth — Neon so they
+	-- actually glow, with a light of their own and a tall light beam rising
+	-- from each one. A flat translucent disc was invisible from anywhere
+	-- except right on top of it, which left players with no visible
+	-- "glowing water" to walk to; the beams are visible from anywhere on
+	-- the map and say "fish here" at a glance.
 	for spotId, spot in pairs(GameConfig.Spots) do
-		local patch = MakePart(world, spotId .. "Water", "Part", Vector3.new(0.4, 14, 14), Vector3.new(spot.Position.X, 0.4, spot.Position.Z), spot.WaterColor, Enum.Material.SmoothPlastic)
+		local patch = MakePart(world, spotId .. "Water", "Part", Vector3.new(0.4, 14, 14), Vector3.new(spot.Position.X, 0.4, spot.Position.Z), spot.WaterColor, Enum.Material.Neon)
 		patch.Shape = Enum.PartType.Cylinder
 		patch.CFrame = CFrame.new(Vector3.new(spot.Position.X, 0.4, spot.Position.Z)) * CFrame.Angles(0, 0, math.rad(90))
-		patch.Transparency = 0.35
+		patch.Transparency = 0.15
 		patch.CanCollide = false
+		local patchLight = Instance.new("PointLight")
+		patchLight.Color = spot.WaterColor
+		patchLight.Brightness = 1.5
+		patchLight.Range = 20
+		patchLight.Parent = patch
+		local beam = MakePart(world, spotId .. "Beam", "Part", Vector3.new(1.4, 44, 1.4), Vector3.new(spot.Position.X, 22, spot.Position.Z), spot.WaterColor, Enum.Material.Neon)
+		beam.Transparency = 0.55
+		beam.CanCollide = false
 	end
 
 	BuildPier(world)
