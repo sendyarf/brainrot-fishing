@@ -390,7 +390,11 @@ function FishingClient.Init()
 					end
 					promptLabel.Visible = true
 				else
-					promptLabel.Visible = false
+					-- Never leave a new player guessing: if no spot is near,
+					-- say where to go instead of hiding the prompt.
+					promptLabel.Text = "Walk to the glowing water to fish — then press E!"
+					promptLabel.TextColor3 = UIHelpers.TextDim
+					promptLabel.Visible = true
 				end
 			elseif fishingPhase == "Waiting" then
 				promptLabel.Text = "Waiting for a bite..."

@@ -82,8 +82,14 @@ local function MakeSign(parent, position, title, subtitle, titleColor)
 	local board = MakePart(parent, "SignBoard", "Part", Vector3.new(4.4, 2.4, 0.3), position + Vector3.new(0, 4.2, 0), Color3.fromRGB(90, 60, 35), Enum.Material.WoodPlanks)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "SignLabel"
-	gui.Size = UDim2.fromOffset(220, 110)
-	gui.StudsOffset = Vector3.new(0, 0.4, 0)
+	-- Size in STUDS (Scale), not pixels: the label is exactly the board's
+	-- size (4.4 x 2.4), so the text sits ON the board and shrinks with
+	-- distance like the board does. A fromOffset size stays the same pixel
+	-- size on screen at any distance, which made every sign a giant wall
+	-- of floating text. MaxDistance hides far signs so the horizon stays clean.
+	gui.Size = UDim2.new(4.4, 0, 2.4, 0)
+	gui.StudsOffset = Vector3.new(0, 0, 0)
+	gui.MaxDistance = 80
 	gui.AlwaysOnTop = false
 	gui.Parent = board
 	local titleLabel = Instance.new("TextLabel")
