@@ -68,6 +68,15 @@ local function RefreshHUD(state)
 		else
 			tanksLabel.TextColor3 = UIHelpers.TextWhite
 		end
+		-- No rebirth yet: center the tanks line in the panel instead of
+		-- leaving the bottom half empty.
+		if state.Rebirths > 0 then
+			tanksLabel.Size = UDim2.new(1, -16, 0.5, 0)
+			tanksLabel.Position = UDim2.new(0, 8, 0, 4)
+		else
+			tanksLabel.Size = UDim2.new(1, -16, 1, 0)
+			tanksLabel.Position = UDim2.new(0, 8, 0, 0)
+		end
 	end
 	if rebirthBadge then
 		if state.Rebirths > 0 then
@@ -188,17 +197,24 @@ function HUDClient.Init()
 		GetRemote("ClaimDaily"):FireServer()
 	end)
 
-	-- Rarity ladder, right edge.
-	local ladderPanel = UIHelpers.NewPanel(gui, "RarityLadder", UDim2.fromOffset(170, 150), UDim2.new(1, -10, 0, 150), Vector2.new(1, 0))
+	-- Rarity ladder, right edge. Same 190px width as the panels above it,
+	-- with an even 8px gap from the daily button.
+	local ladderPanel = UIHelpers.NewPanel(gui, "RarityLadder", UDim2.fromOffset(190, 148), UDim2.new(1, -10, 0, 140), Vector2.new(1, 0))
 	UIHelpers.NewLabel(ladderPanel, "LadderTitle", "CAUGHT", UDim2.new(1, 0, 0, 26), UDim2.new(0, 0, 0, 6), 16, UIHelpers.AccentGold).TextXAlignment = Enum.TextXAlignment.Center
 	for i, tier in ipairs(FishDefinitions.RarityOrder) do
 		local row = UIHelpers.NewLabel(ladderPanel, "Row" .. tier, tier:upper() .. "  0", UDim2.new(1, -16, 0, 22), UDim2.new(0, 8, 0, 30 + (i - 1) * 23), 15, FishDefinitions.RarityColors[tier])
 		ladderRows[tier] = row
 	end
 
-	-- Rod + bait, bottom-left.
-	local gearPanel = UIHelpers.NewPanel(gui, "GearPanel", UDim2.fromOffset(300, 40), UDim2.new(0, 10, 1, -10), Vector2.new(0, 1))
-	rodBaitLabel = UIHelpers.NewLabel(gearPanel, "Gear", "Bamboo Rod  ·  Bread", UDim2.new(1, -16, 1, 0), UDim2.new(0, 8, 0, 0), 17, UIHelpers.TextWhite)
+	-- Rod + bait, bottom-left. Scale width (24% of the screen, capped at
+	-- 340px) so it can never collide with the action buttons, even at
+	-- 768px wide; long rod/bait names truncate with an ellipsis.
+	local gearPanel = UIHelpers.NewPanel(gui, "GearPanel", UDim2.new(0.24, 0, 0, 44), UDim2.new(0, 10, 1, -10), Vector2.new(0, 1))
+	local gearCap = Instance.new("UISizeConstraint")
+	gearCap.MaxSize = UDim2.new(0, 340, 0, 44)
+	gearCap.Parent = gearPanel
+	rodBaitLabel = UIHelpers.NewLabel(gearPanel, "Gear", "Bamboo Rod  ·  Bread", UDim2.new(1, -20, 1, 0), UDim2.new(0, 10, 0, 0), 17, UIHelpers.TextWhite)
+	rodBaitLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
 	-- Quest mini-panel above the gear panel.
 	local questPanel = UIHelpers.NewPanel(gui, "QuestMiniPanel", UDim2.fromOffset(300, 96), UDim2.new(0, 10, 1, -58), Vector2.new(0, 1))
@@ -207,6 +223,9 @@ function HUDClient.Init()
 		local line = UIHelpers.NewLabel(questPanel, "Quest" .. i, "", UDim2.new(1, -16, 0, 22), UDim2.new(0, 8, 0, 26 + (i - 1) * 22), 15, UIHelpers.TextWhite)
 		questLines[i] = line
 	end
+	-- Placeholder until the first state sync arrives (never an empty panel).
+	questLines[1].Text = "Loading quests..."
+	questLines[1].TextColor3 = UIHelpers.TextDim
 	local questOpenButton = Instance.new("TextButton")
 	questOpenButton.Name = "OpenQuests"
 	questOpenButton.Size = UDim2.fromScale(1, 1)
@@ -217,29 +236,31 @@ function HUDClient.Init()
 		require(script.Parent:WaitForChild("QuestClient")).Toggle()
 	end)
 
-	-- Action buttons, bottom-right.
-	local buttonSize = UDim2.fromOffset(116, 46)
+	-- Action buttons, bottom-right. 5 x 100px + 4 x 6px gaps = 524px, so the
+	-- row clears the gear chip even at 768px wide (buttons start at
+	-- x = 234, the gear chip ends at x = 194).
+	local buttonSize = UDim2.fromOffset(100, 44)
 	local function placeButton(index, total)
-		local xOffset = -10 - (total - index) * 124
+		local xOffset = -10 - (total - index) * 106
 		return UDim2.new(1, xOffset, 1, -10)
 	end
-	local shopButton = UIHelpers.NewButton(gui, "ShopButton", "SHOP", buttonSize, placeButton(1, 5), Color3.fromRGB(50, 90, 200), 18, Vector2.new(1, 1))
+	local shopButton = UIHelpers.NewButton(gui, "ShopButton", "SHOP", buttonSize, placeButton(1, 5), Color3.fromRGB(50, 90, 200), 15, Vector2.new(1, 1))
 	shopButton.MouseButton1Click:Connect(function()
 		require(script.Parent:WaitForChild("ShopClient")).Toggle()
 	end)
-	local dexButton = UIHelpers.NewButton(gui, "DexButton", "DEX", buttonSize, placeButton(2, 5), Color3.fromRGB(140, 60, 200), 18, Vector2.new(1, 1))
+	local dexButton = UIHelpers.NewButton(gui, "DexButton", "DEX", buttonSize, placeButton(2, 5), Color3.fromRGB(140, 60, 200), 15, Vector2.new(1, 1))
 	dexButton.MouseButton1Click:Connect(function()
 		require(script.Parent:WaitForChild("BrainrotpediaClient")).Toggle()
 	end)
-	local questsButton = UIHelpers.NewButton(gui, "QuestsButton", "QUESTS", buttonSize, placeButton(3, 5), Color3.fromRGB(200, 140, 20), 18, Vector2.new(1, 1))
+	local questsButton = UIHelpers.NewButton(gui, "QuestsButton", "QUESTS", buttonSize, placeButton(3, 5), Color3.fromRGB(200, 140, 20), 15, Vector2.new(1, 1))
 	questsButton.MouseButton1Click:Connect(function()
 		require(script.Parent:WaitForChild("QuestClient")).Toggle()
 	end)
-	lockButton = UIHelpers.NewButton(gui, "LockButton", "LOCK BASE", buttonSize, placeButton(4, 5), Color3.fromRGB(40, 160, 80), 16, Vector2.new(1, 1))
+	lockButton = UIHelpers.NewButton(gui, "LockButton", "LOCK BASE", buttonSize, placeButton(4, 5), Color3.fromRGB(40, 160, 80), 15, Vector2.new(1, 1))
 	lockButton.MouseButton1Click:Connect(function()
 		GetRemote("LockBase"):FireServer()
 	end)
-	rebirthButton = UIHelpers.NewButton(gui, "RebirthButton", "$0 / $25,000", buttonSize, placeButton(5, 5), Color3.fromRGB(90, 90, 100), 14, Vector2.new(1, 1))
+	rebirthButton = UIHelpers.NewButton(gui, "RebirthButton", "$0 / $25,000", buttonSize, placeButton(5, 5), Color3.fromRGB(90, 90, 100), 12, Vector2.new(1, 1))
 	rebirthButton.MouseButton1Click:Connect(function()
 		local state = ClientState.Get()
 		if state.Cash < GameConfig.RebirthCost or state.Rebirths >= GameConfig.RebirthMax then

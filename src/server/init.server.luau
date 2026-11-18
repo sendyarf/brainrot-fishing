@@ -1,12 +1,21 @@
 -- init.server.luau: Brainrot Fishing server bootstrap.
 -- Order matters: build the world first, then create the RemoteEvents, then
 -- require the services (they WaitForChild the events), then wire the handlers.
+--
+-- ROJO GOTCHA: this is an init.server.luau file, so Rojo turns the src/server
+-- folder itself into the "Server" Script, and every sibling ModuleScript is a
+-- CHILD of this script. Require them via script:WaitForChild — script.Parent
+-- is ServerScriptService, where they will never appear. The old script.Parent
+-- form hung this whole script forever on line 1: no world, no RemoteEvents,
+-- no services, and players spawned with no ground and fell to their deaths.
+-- (The ModuleScripts themselves correctly use script.Parent, because for
+-- them script.Parent IS this Server script.)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- 1. Build the 3D world (lake, pier, islands, base plots, monster).
-local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
+local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
 WorldBuilder.BuildWorld()
 
 -- 2. Create every RemoteEvent the client and server share.
@@ -44,15 +53,15 @@ end
 
 -- 3. Require the services (they find the RemoteEvents already created).
 local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
-local DataService = require(script.Parent:WaitForChild("DataService"))
-local EconomyService = require(script.Parent:WaitForChild("EconomyService"))
-local FishingService = require(script.Parent:WaitForChild("FishingService"))
-local TankService = require(script.Parent:WaitForChild("TankService"))
-local ShopService = require(script.Parent:WaitForChild("ShopService"))
-local StealService = require(script.Parent:WaitForChild("StealService"))
-local MonsterEventService = require(script.Parent:WaitForChild("MonsterEventService"))
-local RebirthService = require(script.Parent:WaitForChild("RebirthService"))
-local QuestService = require(script.Parent:WaitForChild("QuestService"))
+local DataService = require(script:WaitForChild("DataService"))
+local EconomyService = require(script:WaitForChild("EconomyService"))
+local FishingService = require(script:WaitForChild("FishingService"))
+local TankService = require(script:WaitForChild("TankService"))
+local ShopService = require(script:WaitForChild("ShopService"))
+local StealService = require(script:WaitForChild("StealService"))
+local MonsterEventService = require(script:WaitForChild("MonsterEventService"))
+local RebirthService = require(script:WaitForChild("RebirthService"))
+local QuestService = require(script:WaitForChild("QuestService"))
 
 -- 4. Wire the client -> server handlers.
 GetRemote("CastFish").OnServerEvent:Connect(function(player, spotId)
@@ -169,6 +178,19 @@ local function OnPlayerAdded(player)
 		local humanoid = character:WaitForChild("Humanoid")
 		humanoid.Died:Connect(function()
 			FishingService.CancelFishing(player)
+		end)
+		-- Spawn safety net: put the character on the pier even if the
+		-- SpawnLocation is ever missed, and rescue any fall into the void
+		-- (a character below y = -50 is teleported back, never left falling).
+		local root = character:WaitForChild("HumanoidRootPart")
+		root.CFrame = CFrame.new(GameConfig.SpawnPosition)
+		task.spawn(function()
+			while character.Parent do
+				task.wait(0.5)
+				if root.Parent and root.Position.Y < -50 then
+					root.CFrame = CFrame.new(GameConfig.SpawnPosition)
+				end
+			end
 		end)
 	end)
 end

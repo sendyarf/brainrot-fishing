@@ -285,6 +285,7 @@ function WorldBuilder.BuildWorld()
 	spawn.Material = Enum.Material.WoodPlanks
 	spawn.Anchored = true
 	spawn.Duration = 0
+	spawn.Neutral = true -- no teams in this game: anyone may use this spawn
 	spawn.AllowTeamChangeOnTouch = false
 	spawn.Parent = world
 
