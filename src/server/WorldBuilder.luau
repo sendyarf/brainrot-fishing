@@ -213,18 +213,25 @@ local function BuildBasePlot(world, index, center)
 	local plot = Instance.new("Folder")
 	plot.Name = "BasePlot" .. index
 	plot.Parent = world
-	-- Grass pad under the plot (28 x 18: room for 2 rows of big tanks).
-	MakePart(plot, "PlotPad", "Part", Vector3.new(28, 0.4, 18), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(110, 190, 90), Enum.Material.Grass)
-	-- Low wooden fence around three sides (open toward the lake).
-	MakePart(plot, "FenceBack", "Part", Vector3.new(28, 2.5, 0.4), center + Vector3.new(0, 1.45, 9), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceLeft", "Part", Vector3.new(0.4, 2.5, 18), center + Vector3.new(-14, 1.45, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceRight", "Part", Vector3.new(0.4, 2.5, 18), center + Vector3.new(14, 1.45, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	-- Grass pad under the plot (32 x 18: room for 2 rows of 5-stud tanks).
+	MakePart(plot, "PlotPad", "Part", Vector3.new(32, 0.4, 18), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(110, 190, 90), Enum.Material.Grass)
+	-- Wooden fence around three sides (open toward the lake). 4 studs tall
+	-- with corner posts: the old 2.5-stud fence looked like a garden edge
+	-- next to a 5-stud player.
+	MakePart(plot, "FenceBack", "Part", Vector3.new(32, 4, 0.4), center + Vector3.new(0, 2.2, 9), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceLeft", "Part", Vector3.new(0.4, 4, 18), center + Vector3.new(-16, 2.2, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceRight", "Part", Vector3.new(0.4, 4, 18), center + Vector3.new(16, 2.2, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			MakePart(plot, "FencePost" .. (sx < 0 and "L" or "R") .. (sz < 0 and "F" or "B"), "Part", Vector3.new(0.8, 4.6, 0.8), center + Vector3.new(sx * 16, 2.5, sz * 9), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
+		end
+	end
 	-- Owner sign (the name is filled in when a player claims the plot).
 	local sign = MakeSign(plot, center + Vector3.new(0, 0, 10.5), "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170))
 	sign.Name = "OwnerSign"
 	-- Tank anchor pads (12): small stone slabs the glass tanks sit on.
 	for i, offset in ipairs(GameConfig.TankAnchors) do
-		MakePart(plot, "TankPad" .. i, "Part", Vector3.new(4.4, 0.3, 4.4), center + offset + Vector3.new(0, 0.55, 0), Color3.fromRGB(200, 200, 210), Enum.Material.Slate)
+		MakePart(plot, "TankPad" .. i, "Part", Vector3.new(5.2, 0.3, 5.2), center + offset + Vector3.new(0, 0.55, 0), Color3.fromRGB(200, 200, 210), Enum.Material.Slate)
 	end
 	return plot
 end
@@ -298,7 +305,7 @@ function WorldBuilder.BuildWorld()
 	-- Ground: bright green meadow in four slabs that leave a real basin for
 	-- the lake (x -100..100, z -130..10). The old single slab ran under the
 	-- whole lake, so the "lake" was a 0.3-stud sheet lying on grass.
-	MakePart(world, "GroundSouth", "Part", Vector3.new(300, 2, 140), Vector3.new(0, -1, 80), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
+	MakePart(world, "GroundSouth", "Part", Vector3.new(360, 2, 140), Vector3.new(0, -1, 80), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
 	MakePart(world, "GroundNorth", "Part", Vector3.new(300, 2, 20), Vector3.new(0, -1, -140), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
 	MakePart(world, "GroundEast", "Part", Vector3.new(50, 2, 140), Vector3.new(125, -1, -60), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
 	MakePart(world, "GroundWest", "Part", Vector3.new(50, 2, 140), Vector3.new(-125, -1, -60), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)

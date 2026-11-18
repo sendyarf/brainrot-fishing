@@ -120,21 +120,32 @@ local function ApplyMutationSkin(model, mutation)
 	end
 end
 
+-- Lightens a Color3 toward white (for the belly).
+local function Lighten(color)
+	return Color3.new(
+		math.min(1, color.R * 0.6 + 0.4),
+		math.min(1, color.G * 0.6 + 0.4),
+		math.min(1, color.B * 0.6 + 0.4))
+end
+
 -- Builds the full fish model. mutation: "None" | "Golden" | "Rainbow".
--- Fish are built at 1.4x so they read clearly inside the bigger tanks
--- (the old 1x fish looked tiny from a few steps away); Naga Nila is 1.6x.
+-- Fish are built at 1.8x so they fill their 5-stud tanks (the old 1.4x
+-- fish looked small from a few steps away); Naga Nila is 1.9x, eels 1.6x
+-- with a longer body. The tail is kept short so it does not poke through
+-- the glass when the fish turns.
 function FishModelFactory.BuildFishModel(fishId, mutation)
 	local def = FishDefinitions.Fish[fishId]
 	if not def then
 		return nil
 	end
-	local scale = 1.4
+	local scale = 1.8
 	if fishId == "NagaNila" then
-		scale = 1.6
+		scale = 1.9
 	end
 	local length = 2.2
 	if fishId == "SidatSultan" or fishId == "BelutBarista" then
-		length = 3.0
+		scale = 1.6
+		length = 2.6
 	end
 
 	local model = Instance.new("Model")
@@ -145,12 +156,25 @@ function FishModelFactory.BuildFishModel(fishId, mutation)
 	body.Shape = Enum.PartType.Ball
 	model.PrimaryPart = body
 
-	-- Tail fin: a wedge at the back.
-	local tail = MakeModelPart(model, "Tail", "WedgePart", Vector3.new(0.9 * scale, 0.9 * scale, 0.9 * scale), Vector3.new(0, 0.1 * scale, -(length / 2 + 0.4) * scale), def.AccentColor)
-	tail.CFrame = CFrame.new(Vector3.new(0, 0.1 * scale, -(length / 2 + 0.4) * scale)) * CFrame.Angles(math.rad(90), 0, 0)
+	-- Tail fin: a wedge at the back, kept close to the body so the tail
+	-- tip does not poke through the glass when the fish turns.
+	local tail = MakeModelPart(model, "Tail", "WedgePart", Vector3.new(0.8 * scale, 0.8 * scale, 0.8 * scale), Vector3.new(0, 0.1 * scale, -(length / 2 + 0.25) * scale), def.AccentColor)
+	tail.CFrame = CFrame.new(Vector3.new(0, 0.1 * scale, -(length / 2 + 0.25) * scale)) * CFrame.Angles(math.rad(90), 0, 0)
 
 	-- Top fin.
 	MakeModelPart(model, "TopFin", "WedgePart", Vector3.new(0.15 * scale, 0.6 * scale, 1 * scale), Vector3.new(0, 0.55 * scale, -0.2 * scale), def.AccentColor)
+
+	-- Pectoral fins: two angled wedges on the sides. The side view is how
+	-- you see a fish in a tank; without them the body reads as a plain ball.
+	for _, side in ipairs({ -1, 1 }) do
+		local fin = MakeModelPart(model, "SideFin" .. (side < 0 and "L" or "R"), "WedgePart", Vector3.new(0.6 * scale, 0.15 * scale, 0.9 * scale), Vector3.new(side * 0.6 * scale, -0.1 * scale, 0.3 * scale), def.AccentColor)
+		fin.CFrame = CFrame.new(Vector3.new(side * 0.6 * scale, -0.1 * scale, 0.3 * scale)) * CFrame.Angles(0, 0, math.rad(side * -35))
+	end
+
+	-- Belly: a lighter flattened ball under the body, so the fish has a
+	-- two-tone body instead of one flat color.
+	local belly = MakeModelPart(model, "Belly", "Part", Vector3.new(0.9 * scale, 0.5 * scale, length * 0.8 * scale), Vector3.new(0, -0.25 * scale, 0), Lighten(def.BodyColor))
+	belly.Shape = Enum.PartType.Ball
 
 	-- Eyes: two white balls with black pupils, front of the body.
 	for _, side in ipairs({ -1, 1 }) do

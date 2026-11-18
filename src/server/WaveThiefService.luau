@@ -63,16 +63,17 @@ local function MakePart(model, name, size, offset, color, material)
 end
 
 -- A cloaked shadow figure: stacked robe, head with glowing red eyes, a
--- pointed hood, and a red light so it reads at night. It glides instead of
--- walking (no legs) — it is a ghost, after all.
+-- pointed hood, a red light so it reads at night, and a tall red beacon
+-- beam so the player can spot it from across the lake (the thief walks in
+-- behind a fishing player, who would otherwise never see it).
 local function BuildThiefModel()
 	local model = Instance.new("Model")
 	model.Name = "ShadowThief"
-	local robeColor = Color3.fromRGB(25, 15, 40)
+	local robeColor = Color3.fromRGB(45, 28, 65)
 	local bottom = MakePart(model, "RobeBottom", Vector3.new(2.2, 1.2, 2.2), Vector3.new(0, 0.6, 0), robeColor)
 	MakePart(model, "RobeMid", Vector3.new(1.7, 1.2, 1.7), Vector3.new(0, 1.8, 0), robeColor)
 	MakePart(model, "RobeTop", Vector3.new(1.2, 1, 1.2), Vector3.new(0, 2.9, 0), robeColor)
-	local head = MakePart(model, "Head", Vector3.new(1.1, 1.1, 1.1), Vector3.new(0, 4, 0), Color3.fromRGB(30, 20, 45))
+	local head = MakePart(model, "Head", Vector3.new(1.1, 1.1, 1.1), Vector3.new(0, 4, 0), Color3.fromRGB(50, 35, 70))
 	head.Shape = Enum.PartType.Ball
 	local hood = MakePart(model, "Hood", Vector3.new(0.8, 1.2, 0.8), Vector3.new(0, 4.9, 0), robeColor)
 	hood.Shape = Enum.PartType.Ball
@@ -80,11 +81,13 @@ local function BuildThiefModel()
 		local eye = MakePart(model, "Eye" .. (side < 0 and "L" or "R"), Vector3.new(0.28, 0.28, 0.28), Vector3.new(side * 0.25, 4.1, 0.5), Color3.fromRGB(255, 50, 50), Enum.Material.Neon)
 		eye.Shape = Enum.PartType.Ball
 	end
+	local beacon = MakePart(model, "Beacon", Vector3.new(0.5, 20, 0.5), Vector3.new(0, 12, 0), Color3.fromRGB(255, 60, 60), Enum.Material.Neon)
+	beacon.Transparency = 0.5
 	local light = Instance.new("PointLight")
 	light.Name = "ThiefGlow"
 	light.Color = Color3.fromRGB(255, 60, 60)
 	light.Brightness = 2
-	light.Range = 12
+	light.Range = 16
 	light.Parent = bottom
 	model.PrimaryPart = bottom
 	return model

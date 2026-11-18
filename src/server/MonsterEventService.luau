@@ -32,7 +32,9 @@ end
 -- Each unlocked, unguarded tank has a 25% chance to be robbed. The theft is
 -- no longer instant: a shadow thief walks in from the lake and channels on
 -- the tank, so the owner can see it coming and save the fish by guarding
--- or locking the base before the channel finishes.
+-- or locking the base before the channel finishes. At least one thief is
+-- guaranteed per eligible victim per wave: a wave that rolls zero trips
+-- looks identical to a broken event (the player never sees the thief).
 function MonsterEventService.RaidUnlockedTanks()
 	for _, player in ipairs(Players:GetPlayers()) do
 		local data = DataService.GetData(player)
@@ -47,10 +49,8 @@ function MonsterEventService.RaidUnlockedTanks()
 						trips = trips + 1
 					end
 				end
-				trips = math.min(trips, 3)
-				if trips > 0 then
-					WaveThiefService.SendThief(player, trips)
-				end
+				trips = math.clamp(trips, 1, 3)
+				WaveThiefService.SendThief(player, trips)
 			end
 		end
 	end

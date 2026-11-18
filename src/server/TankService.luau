@@ -123,11 +123,11 @@ local function CreateTankVisual(player, tankIndex, tank)
 	folder.Name = "Tank" .. tankIndex
 	folder.Parent = game:GetService("Workspace"):FindFirstChild("BrainrotFishingWorld")
 
-	-- Bigger tanks (4.2 x 3.8 x 4.2) for the bigger 1.4x fish: the old
-	-- 2.8-stud tanks made every fish look tiny from a few steps away.
+	-- Bigger tanks (5 x 4.5 x 5) for the bigger 1.9x fish: the old 4.2-stud
+	-- tanks made every fish look small from a few steps away.
 	local glass = Instance.new("Part")
 	glass.Name = "TankGlass"
-	glass.Size = Vector3.new(4.2, 3.8, 4.2)
+	glass.Size = Vector3.new(5, 4.5, 5)
 	glass.Position = center + Vector3.new(0, 0.3, 0)
 	glass.Color = Color3.fromRGB(200, 230, 255)
 	glass.Material = Enum.Material.Glass
@@ -138,7 +138,7 @@ local function CreateTankVisual(player, tankIndex, tank)
 
 	local water = Instance.new("Part")
 	water.Name = "TankWater"
-	water.Size = Vector3.new(3.9, 3.2, 3.9)
+	water.Size = Vector3.new(4.7, 3.9, 4.7)
 	water.Position = center + Vector3.new(0, 0.1, 0)
 	water.Color = Color3.fromRGB(60, 170, 220)
 	water.Material = Enum.Material.SmoothPlastic
@@ -153,12 +153,13 @@ local function CreateTankVisual(player, tankIndex, tank)
 		fishModel:PivotTo(CFrame.new(center))
 	end
 	-- Swim radius from the fish's body length, so long fish (eels, Naga)
-	-- stay inside the glass instead of poking through it.
+	-- stay inside the glass instead of poking through it. 2.5 is the
+	-- half-width of the 5-stud tank.
 	local swimRadius = 0.45
 	if fishModel then
 		local body = fishModel:FindFirstChild("Body")
 		if body then
-			swimRadius = math.clamp(2 - math.max(body.Size.X, body.Size.Z) / 2, 0.12, 0.55)
+			swimRadius = math.clamp(2.5 - math.max(body.Size.X, body.Size.Z) / 2, 0.12, 0.55)
 		end
 	end
 
@@ -168,7 +169,7 @@ local function CreateTankVisual(player, tankIndex, tank)
 	local lockPart = Instance.new("Part")
 	lockPart.Name = "LockIndicator"
 	lockPart.Size = Vector3.new(0.7, 0.7, 0.25)
-	lockPart.Position = center + Vector3.new(0, 2.5, 0)
+	lockPart.Position = center + Vector3.new(0, 3, 0)
 	lockPart.Color = Color3.fromRGB(255, 210, 60)
 	lockPart.Material = Enum.Material.Neon
 	lockPart.Anchored = true
