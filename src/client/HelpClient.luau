@@ -19,6 +19,7 @@ local STEPS = {
 	"4.  Spend $ in the SHOP: better rods, tastier bait, more tank slots, and new fishing spots.",
 	"5.  LOCK BASE protects your tanks from thieves and from Naga Nila's wave. REBIRTH at $25,000 for +50% income forever!",
 	"6.  Steal from other players: walk up to their tank and hold E for 3 seconds — unless their base is locked or they are guarding it.",
+	"7.  Press H (or tap HOLSTER) to put your rod away. Casting picks it back up automatically.",
 }
 
 function HelpClient.Show()
@@ -59,7 +60,7 @@ function HelpClient.Init()
 	stepsFrame.BackgroundTransparency = 1
 	stepsFrame.BorderSizePixel = 0
 	stepsFrame.ScrollBarThickness = 6
-	stepsFrame.CanvasSize = UDim2.new(0, 0, 0, 6 * 56 + 4)
+	stepsFrame.CanvasSize = UDim2.new(0, 0, 0, 7 * 56 + 4)
 	stepsFrame.Parent = helpPanel
 	for i, step in ipairs(STEPS) do
 		local label = UIHelpers.NewLabel(stepsFrame, "Step" .. i, step, UDim2.new(1, -8, 0, 52), UDim2.new(0, 0, 0, 4 + (i - 1) * 56), 16, UIHelpers.TextWhite)

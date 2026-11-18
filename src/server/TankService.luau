@@ -50,12 +50,15 @@ local function BuildTankLabel(glass, fishId, mutation, income, locked, tankIndex
 	local def = FishDefinitions.Fish[fishId]
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "TankLabel"
-	gui.Size = UDim2.fromOffset(180, 84)
-	-- Alternate label heights so neighbouring tanks never collide, and only
-	-- show labels up close (the old 200px labels overlapped from a few
-	-- studs away and cluttered the whole base row).
-	gui.StudsOffset = Vector3.new(0, (tankIndex % 2 == 0) and 2.6 or 4, 0)
-	gui.MaxDistance = 60
+	gui.Size = UDim2.fromOffset(150, 72)
+	-- Three staggered label heights, so neighbouring tanks never collide
+	-- even when five tanks in a row are viewed at an angle (the old two
+	-- heights still stacked into an unreadable jumble). Labels are narrower
+	-- too: at 5.2-stud tank spacing, a 180px label is wider than the gap
+	-- between two tanks on screen.
+	local labelHeights = { 2.6, 3.5, 4.4 }
+	gui.StudsOffset = Vector3.new(0, labelHeights[(tankIndex - 1) % 3 + 1], 0)
+	gui.MaxDistance = 45
 	gui.AlwaysOnTop = true
 	gui.Parent = glass
 
@@ -65,7 +68,7 @@ local function BuildTankLabel(glass, fishId, mutation, income, locked, tankIndex
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = def.Name
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.TextSize = 20
+	nameLabel.TextSize = 17
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextStrokeTransparency = 0.3
 	nameLabel.Parent = gui
@@ -86,7 +89,7 @@ local function BuildTankLabel(glass, fishId, mutation, income, locked, tankIndex
 	end
 	rarityLabel.Text = rarityText
 	rarityLabel.TextColor3 = FishDefinitions.RarityColors[def.Rarity]
-	rarityLabel.TextSize = 16
+	rarityLabel.TextSize = 14
 	rarityLabel.Font = Enum.Font.GothamBold
 	rarityLabel.TextStrokeTransparency = 0.3
 	rarityLabel.Parent = gui
@@ -98,7 +101,7 @@ local function BuildTankLabel(glass, fishId, mutation, income, locked, tankIndex
 	incomeLabel.BackgroundTransparency = 1
 	incomeLabel.Text = "$" .. income .. "/s"
 	incomeLabel.TextColor3 = Color3.fromRGB(120, 255, 140)
-	incomeLabel.TextSize = 18
+	incomeLabel.TextSize = 15
 	incomeLabel.Font = Enum.Font.GothamBold
 	incomeLabel.TextStrokeTransparency = 0.3
 	incomeLabel.Parent = gui

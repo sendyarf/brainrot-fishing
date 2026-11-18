@@ -1,7 +1,13 @@
 -- FishModelFactory: builds each of the 9 brainrot fish as a small 3D model from parts.
 -- Body + tail + fins + one signature accessory per fish, so every fish reads
--- at a glance. Naga Nila is built at 2x scale. Mutations re-skin the model:
+-- at a glance. Naga Nila is built at 1.9x scale. Mutations re-skin the model:
 -- Golden = glowing gold, Rainbow = neon with a rainbow particle trail.
+-- JOIN RULE: every part must overlap the body (or the part under it) by a
+-- clear margin. A part that merely touches the body's curved surface, or
+-- floats a hair above it, reads as a separate floating object from a few
+-- studs away — the fish looks broken apart instead of whole. Body semi-axes
+-- are X 0.55, Y 0.45, Z length/2 (1.1 regular, 1.3 eels), so the top surface
+-- is y = 0.45 at z = 0 and curves down toward the nose and tail.
 
 local FishDefinitions = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("FishDefinitions"))
 
@@ -21,67 +27,86 @@ local function MakeModelPart(model, name, className, size, offset, color, materi
 end
 
 -- The signature accessory for one fish id (a few extra parts on the body).
+-- Every part here overlaps the body by a clear margin (see the JOIN RULE
+-- above): the hat, crown, piano and horns used to float just above the
+-- body's curved surface, and the baton, lance and coffee cup used to float
+-- beside it — from a few studs away each one read as a separate object.
 local function AddAccessory(model, fishId, def, scale)
 	local accent = def.AccentColor
 	if fishId == "LeleLirico" then
-		-- Two long curved whiskers (thin cylinders angled forward).
-		local w1 = MakeModelPart(model, "WhiskerL", "Part", Vector3.new(0.12 * scale, 0.12 * scale, 1.6 * scale), Vector3.new(-0.3 * scale, 0.25 * scale, 1.4 * scale), accent)
+		-- Two long curved whiskers (thin cylinders angled forward). Their
+		-- rear ends are buried in the nose; whiskers are thin by nature.
+		local w1 = MakeModelPart(model, "WhiskerL", "Part", Vector3.new(0.14 * scale, 0.14 * scale, 1.6 * scale), Vector3.new(-0.3 * scale, 0.25 * scale, 1.4 * scale), accent)
 		w1.CFrame = CFrame.new(Vector3.new(-0.3 * scale, 0.25 * scale, 1.4 * scale)) * CFrame.Angles(math.rad(20), math.rad(25), 0)
-		local w2 = MakeModelPart(model, "WhiskerR", "Part", Vector3.new(0.12 * scale, 0.12 * scale, 1.6 * scale), Vector3.new(0.3 * scale, 0.25 * scale, 1.4 * scale), accent)
+		local w2 = MakeModelPart(model, "WhiskerR", "Part", Vector3.new(0.14 * scale, 0.14 * scale, 1.6 * scale), Vector3.new(0.3 * scale, 0.25 * scale, 1.4 * scale), accent)
 		w2.CFrame = CFrame.new(Vector3.new(0.3 * scale, 0.25 * scale, 1.4 * scale)) * CFrame.Angles(math.rad(20), math.rad(-25), 0)
 	elseif fishId == "GuppyGondola" then
-		-- Mini straw hat: brim disc + dome.
-		local brim = MakeModelPart(model, "HatBrim", "Part", Vector3.new(0.1 * scale, 1.1 * scale, 1.1 * scale), Vector3.new(0, 0.65 * scale, 0.2 * scale), Color3.fromRGB(240, 210, 130), Enum.Material.Wood)
+		-- Mini straw hat: brim disc + dome. The brim is sunk into the head
+		-- (it used to float 0.16 above the body).
+		local brim = MakeModelPart(model, "HatBrim", "Part", Vector3.new(0.1 * scale, 1.1 * scale, 1.1 * scale), Vector3.new(0, 0.45 * scale, 0.2 * scale), Color3.fromRGB(240, 210, 130), Enum.Material.Wood)
 		brim.Shape = Enum.PartType.Cylinder
-		brim.CFrame = CFrame.new(Vector3.new(0, 0.65 * scale, 0.2 * scale)) * CFrame.Angles(0, 0, math.rad(90))
-		MakeModelPart(model, "HatTop", "Part", Vector3.new(0.6 * scale, 0.4 * scale, 0.6 * scale), Vector3.new(0, 0.85 * scale, 0.2 * scale), Color3.fromRGB(220, 180, 100), Enum.Material.Wood)
+		brim.CFrame = CFrame.new(Vector3.new(0, 0.45 * scale, 0.2 * scale)) * CFrame.Angles(0, 0, math.rad(90))
+		MakeModelPart(model, "HatTop", "Part", Vector3.new(0.6 * scale, 0.4 * scale, 0.6 * scale), Vector3.new(0, 0.65 * scale, 0.2 * scale), Color3.fromRGB(220, 180, 100), Enum.Material.Wood)
 	elseif fishId == "MujairMaestro" then
-		-- Conductor baton + bow tie.
-		local baton = MakeModelPart(model, "Baton", "Part", Vector3.new(0.1 * scale, 0.1 * scale, 1.2 * scale), Vector3.new(0.5 * scale, 0.4 * scale, 1.1 * scale), Color3.fromRGB(255, 255, 255))
-		baton.CFrame = CFrame.new(Vector3.new(0.5 * scale, 0.4 * scale, 1.1 * scale)) * CFrame.Angles(math.rad(-30), 0, math.rad(20))
-		MakeModelPart(model, "BowTieL", "WedgePart", Vector3.new(0.4 * scale, 0.3 * scale, 0.2 * scale), Vector3.new(-0.25 * scale, -0.1 * scale, 1.05 * scale), Color3.fromRGB(200, 40, 60))
-		MakeModelPart(model, "BowTieR", "WedgePart", Vector3.new(0.4 * scale, 0.3 * scale, 0.2 * scale), Vector3.new(0.25 * scale, -0.1 * scale, 1.05 * scale), Color3.fromRGB(200, 40, 60))
+		-- Conductor baton + bow tie. The baton's rear end is buried in the
+		-- head (it used to float beside it); the bow tie hangs under the
+		-- chin, sunk into the body (it used to float on the nose tip).
+		local baton = MakeModelPart(model, "Baton", "Part", Vector3.new(0.1 * scale, 0.1 * scale, 1.2 * scale), Vector3.new(0.4 * scale, 0.25 * scale, 0.85 * scale), Color3.fromRGB(255, 255, 255))
+		baton.CFrame = CFrame.new(Vector3.new(0.4 * scale, 0.25 * scale, 0.85 * scale)) * CFrame.Angles(math.rad(-30), 0, math.rad(20))
+		MakeModelPart(model, "BowTieL", "WedgePart", Vector3.new(0.4 * scale, 0.3 * scale, 0.2 * scale), Vector3.new(-0.2 * scale, -0.3 * scale, 0.75 * scale), Color3.fromRGB(200, 40, 60))
+		MakeModelPart(model, "BowTieR", "WedgePart", Vector3.new(0.4 * scale, 0.3 * scale, 0.2 * scale), Vector3.new(0.2 * scale, -0.3 * scale, 0.75 * scale), Color3.fromRGB(200, 40, 60))
 	elseif fishId == "PatinPianissimo" then
-		-- A floating mini piano under the fish.
-		MakeModelPart(model, "Piano", "Part", Vector3.new(1.4 * scale, 0.5 * scale, 0.8 * scale), Vector3.new(0, -0.75 * scale, 0.4 * scale), Color3.fromRGB(30, 30, 35))
+		-- A mini piano carried under the belly, its top half sunk into the
+		-- body (it used to float 0.05 below the body, reading as a separate
+		-- dark box). The keys face forward so they read from the side.
+		MakeModelPart(model, "Piano", "Part", Vector3.new(1.4 * scale, 0.5 * scale, 0.8 * scale), Vector3.new(0, -0.45 * scale, 0.3 * scale), Color3.fromRGB(30, 30, 35))
 		for i = 1, 5 do
-			MakeModelPart(model, "PianoKey" .. i, "Part", Vector3.new(0.22 * scale, 0.1 * scale, 0.5 * scale), Vector3.new(-0.56 * scale + (i - 1) * 0.28 * scale, -0.45 * scale, 0.4 * scale), Color3.fromRGB(255, 255, 255))
+			MakeModelPart(model, "PianoKey" .. i, "Part", Vector3.new(0.22 * scale, 0.3 * scale, 0.06 * scale), Vector3.new(-0.56 * scale + (i - 1) * 0.28 * scale, -0.45 * scale, 0.72 * scale), Color3.fromRGB(255, 255, 255))
 		end
 	elseif fishId == "KoiKavaleri" then
-		-- Knight helmet + red plume + tiny lance.
+		-- Knight helmet + red plume + tiny lance. The lance's rear end is
+		-- buried in the body (it used to float beside the fish).
 		local helm = MakeModelPart(model, "Helmet", "Part", Vector3.new(0.9 * scale, 0.7 * scale, 0.9 * scale), Vector3.new(0, 0.6 * scale, 0.3 * scale), Color3.fromRGB(180, 180, 190), Enum.Material.Metal)
 		helm.Shape = Enum.PartType.Ball
 		MakeModelPart(model, "Plume", "Part", Vector3.new(0.2 * scale, 0.7 * scale, 0.2 * scale), Vector3.new(0, 1.1 * scale, 0.3 * scale), Color3.fromRGB(220, 40, 40))
-		local lance = MakeModelPart(model, "Lance", "Part", Vector3.new(0.1 * scale, 0.1 * scale, 1.8 * scale), Vector3.new(0.6 * scale, 0.1 * scale, 1.2 * scale), Color3.fromRGB(200, 200, 210), Enum.Material.Metal)
-		lance.CFrame = CFrame.new(Vector3.new(0.6 * scale, 0.1 * scale, 1.2 * scale)) * CFrame.Angles(math.rad(10), 0, 0)
+		local lance = MakeModelPart(model, "Lance", "Part", Vector3.new(0.1 * scale, 0.1 * scale, 1.8 * scale), Vector3.new(0.35 * scale, 0.05 * scale, 1.1 * scale), Color3.fromRGB(200, 200, 210), Enum.Material.Metal)
+		lance.CFrame = CFrame.new(Vector3.new(0.35 * scale, 0.05 * scale, 1.1 * scale)) * CFrame.Angles(math.rad(10), 0, 0)
 	elseif fishId == "ArwanaAstronaut" then
-		-- Glass space helmet + oxygen tank.
+		-- Glass space helmet + oxygen tank. The helmet encloses the head
+		-- (that is the design); the tank's base is sunk into the back.
 		local helmet = MakeModelPart(model, "SpaceHelmet", "Part", Vector3.new(1.3 * scale, 1.3 * scale, 1.3 * scale), Vector3.new(0, 0.2 * scale, 0.5 * scale), Color3.fromRGB(180, 220, 255), Enum.Material.Glass)
 		helmet.Shape = Enum.PartType.Ball
 		helmet.Transparency = 0.4
 		MakeModelPart(model, "OxygenTank", "Part", Vector3.new(0.4 * scale, 0.9 * scale, 0.4 * scale), Vector3.new(0, 0.5 * scale, -0.6 * scale), Color3.fromRGB(200, 200, 210), Enum.Material.Metal)
 	elseif fishId == "SidatSultan" then
-		-- Golden crown + purple cape.
-		MakeModelPart(model, "CrownBase", "Part", Vector3.new(0.9 * scale, 0.3 * scale, 0.9 * scale), Vector3.new(0, 0.7 * scale, 0.4 * scale), Color3.fromRGB(255, 210, 60), Enum.Material.Metal)
+		-- Golden crown + purple cape. The crown base is sunk into the head
+		-- (it used to float 0.12 above it); the cape rides on the back.
+		MakeModelPart(model, "CrownBase", "Part", Vector3.new(0.9 * scale, 0.3 * scale, 0.9 * scale), Vector3.new(0, 0.5 * scale, 0.4 * scale), Color3.fromRGB(255, 210, 60), Enum.Material.Metal)
 		for i = 1, 3 do
-			MakeModelPart(model, "CrownSpike" .. i, "Part", Vector3.new(0.18 * scale, 0.4 * scale, 0.18 * scale), Vector3.new(-0.3 * scale + (i - 1) * 0.3 * scale, 1 * scale, 0.4 * scale), Color3.fromRGB(255, 210, 60), Enum.Material.Metal)
+			MakeModelPart(model, "CrownSpike" .. i, "Part", Vector3.new(0.18 * scale, 0.4 * scale, 0.18 * scale), Vector3.new(-0.3 * scale + (i - 1) * 0.3 * scale, 0.8 * scale, 0.4 * scale), Color3.fromRGB(255, 210, 60), Enum.Material.Metal)
 		end
-		MakeModelPart(model, "Cape", "Part", Vector3.new(0.9 * scale, 0.1 * scale, 1.4 * scale), Vector3.new(0, 0.2 * scale, -1 * scale), Color3.fromRGB(120, 50, 200), Enum.Material.SmoothPlastic)
+		MakeModelPart(model, "Cape", "Part", Vector3.new(0.9 * scale, 0.1 * scale, 1.4 * scale), Vector3.new(0, 0.32 * scale, -1 * scale), Color3.fromRGB(120, 50, 200), Enum.Material.SmoothPlastic)
 	elseif fishId == "BelutBarista" then
-		-- Barista apron + a mini coffee cup held on the fin.
-		MakeModelPart(model, "Apron", "Part", Vector3.new(0.8 * scale, 0.9 * scale, 0.1 * scale), Vector3.new(0, -0.1 * scale, 0.6 * scale), Color3.fromRGB(255, 245, 230))
-		local cup = MakeModelPart(model, "CoffeeCup", "Part", Vector3.new(0.35 * scale, 0.4 * scale, 0.4 * scale), Vector3.new(0.6 * scale, 0.1 * scale, 0.9 * scale), Color3.fromRGB(255, 255, 255))
+		-- Barista apron under the belly + a mini coffee cup on the side.
+		-- The old apron was a flat plate buried inside the eel (invisible);
+		-- the cup floated beside it. Both now overlap the body clearly.
+		MakeModelPart(model, "Apron", "Part", Vector3.new(0.8 * scale, 0.12 * scale, 1.2 * scale), Vector3.new(0, -0.55 * scale, 0.4 * scale), Color3.fromRGB(255, 245, 230))
+		local cup = MakeModelPart(model, "CoffeeCup", "Part", Vector3.new(0.35 * scale, 0.4 * scale, 0.4 * scale), Vector3.new(0.45 * scale, 0.1 * scale, 0.9 * scale), Color3.fromRGB(255, 255, 255))
 		cup.Shape = Enum.PartType.Cylinder
-		cup.CFrame = CFrame.new(Vector3.new(0.6 * scale, 0.1 * scale, 0.9 * scale)) * CFrame.Angles(0, 0, math.rad(90))
-		MakeModelPart(model, "Coffee", "Part", Vector3.new(0.28 * scale, 0.08 * scale, 0.28 * scale), Vector3.new(0.6 * scale, 0.32 * scale, 0.9 * scale), Color3.fromRGB(90, 55, 25))
+		cup.CFrame = CFrame.new(Vector3.new(0.45 * scale, 0.1 * scale, 0.9 * scale)) * CFrame.Angles(0, 0, math.rad(90))
+		MakeModelPart(model, "Coffee", "Part", Vector3.new(0.28 * scale, 0.08 * scale, 0.28 * scale), Vector3.new(0.45 * scale, 0.32 * scale, 0.9 * scale), Color3.fromRGB(90, 55, 25))
 	elseif fishId == "NagaNila" then
-		-- Dragon horns + red crest + whiskers (built at 2x scale already).
-		local h1 = MakeModelPart(model, "HornL", "Part", Vector3.new(0.25 * scale, 0.9 * scale, 0.25 * scale), Vector3.new(-0.4 * scale, 0.8 * scale, 0.6 * scale), Color3.fromRGB(255, 240, 200), Enum.Material.SmoothPlastic)
-		h1.CFrame = CFrame.new(Vector3.new(-0.4 * scale, 0.8 * scale, 0.6 * scale)) * CFrame.Angles(0, 0, math.rad(20))
-		local h2 = MakeModelPart(model, "HornR", "Part", Vector3.new(0.25 * scale, 0.9 * scale, 0.25 * scale), Vector3.new(0.4 * scale, 0.8 * scale, 0.6 * scale), Color3.fromRGB(255, 240, 200), Enum.Material.SmoothPlastic)
-		h2.CFrame = CFrame.new(Vector3.new(0.4 * scale, 0.8 * scale, 0.6 * scale)) * CFrame.Angles(0, 0, math.rad(-20))
+		-- Dragon horns + red crest + whiskers (built at 1.9x scale already).
+		-- The horns are sunk into the head (they barely touched before);
+		-- the crest follows the body's curve down the back (the rearmost
+		-- spike used to float above the tail).
+		local h1 = MakeModelPart(model, "HornL", "Part", Vector3.new(0.25 * scale, 0.9 * scale, 0.25 * scale), Vector3.new(-0.4 * scale, 0.65 * scale, 0.6 * scale), Color3.fromRGB(255, 240, 200), Enum.Material.SmoothPlastic)
+		h1.CFrame = CFrame.new(Vector3.new(-0.4 * scale, 0.65 * scale, 0.6 * scale)) * CFrame.Angles(0, 0, math.rad(20))
+		local h2 = MakeModelPart(model, "HornR", "Part", Vector3.new(0.25 * scale, 0.9 * scale, 0.25 * scale), Vector3.new(0.4 * scale, 0.65 * scale, 0.6 * scale), Color3.fromRGB(255, 240, 200), Enum.Material.SmoothPlastic)
+		h2.CFrame = CFrame.new(Vector3.new(0.4 * scale, 0.65 * scale, 0.6 * scale)) * CFrame.Angles(0, 0, math.rad(-20))
+		local crestHeights = { 0.65, 0.55, 0.35 }
 		for i = 1, 3 do
-			MakeModelPart(model, "Crest" .. i, "WedgePart", Vector3.new(0.15 * scale, 0.5 * scale, 0.4 * scale), Vector3.new(0, 0.65 * scale, 0.1 * scale - (i - 1) * 0.5 * scale), Color3.fromRGB(220, 40, 40))
+			MakeModelPart(model, "Crest" .. i, "WedgePart", Vector3.new(0.15 * scale, 0.5 * scale, 0.4 * scale), Vector3.new(0, crestHeights[i] * scale, 0.1 * scale - (i - 1) * 0.5 * scale), Color3.fromRGB(220, 40, 40))
 		end
 	end
 end
@@ -157,30 +182,37 @@ function FishModelFactory.BuildFishModel(fishId, mutation)
 	model.PrimaryPart = body
 
 	-- Tail fin: a wedge at the back, kept close to the body so the tail
-	-- tip does not poke through the glass when the fish turns.
-	local tail = MakeModelPart(model, "Tail", "WedgePart", Vector3.new(0.8 * scale, 0.8 * scale, 0.8 * scale), Vector3.new(0, 0.1 * scale, -(length / 2 + 0.25) * scale), def.AccentColor)
-	tail.CFrame = CFrame.new(Vector3.new(0, 0.1 * scale, -(length / 2 + 0.25) * scale)) * CFrame.Angles(math.rad(90), 0, 0)
+	-- tip does not poke through the glass when the fish turns. The tail is
+	-- bigger than before and overlaps the body by 0.35, so it reads as one
+	-- piece with the body instead of a separate wedge.
+	local tail = MakeModelPart(model, "Tail", "WedgePart", Vector3.new(1 * scale, 1 * scale, 1 * scale), Vector3.new(0, 0.1 * scale, -(length / 2 + 0.15) * scale), def.AccentColor)
+	tail.CFrame = CFrame.new(Vector3.new(0, 0.1 * scale, -(length / 2 + 0.15) * scale)) * CFrame.Angles(math.rad(90), 0, 0)
 
-	-- Top fin.
-	MakeModelPart(model, "TopFin", "WedgePart", Vector3.new(0.15 * scale, 0.6 * scale, 1 * scale), Vector3.new(0, 0.55 * scale, -0.2 * scale), def.AccentColor)
+	-- Top fin: thick enough to read from the front, base buried in the body.
+	MakeModelPart(model, "TopFin", "WedgePart", Vector3.new(0.25 * scale, 0.8 * scale, 1.2 * scale), Vector3.new(0, 0.5 * scale, -0.2 * scale), def.AccentColor)
 
-	-- Pectoral fins: two angled wedges on the sides. The side view is how
-	-- you see a fish in a tank; without them the body reads as a plain ball.
+	-- Pectoral fins: two angled wedges on the sides, their inner half
+	-- buried in the body so they read as fins, not floating slivers.
+	-- The side view is how you see a fish in a tank; without them the
+	-- body reads as a plain ball.
 	for _, side in ipairs({ -1, 1 }) do
-		local fin = MakeModelPart(model, "SideFin" .. (side < 0 and "L" or "R"), "WedgePart", Vector3.new(0.6 * scale, 0.15 * scale, 0.9 * scale), Vector3.new(side * 0.6 * scale, -0.1 * scale, 0.3 * scale), def.AccentColor)
-		fin.CFrame = CFrame.new(Vector3.new(side * 0.6 * scale, -0.1 * scale, 0.3 * scale)) * CFrame.Angles(0, 0, math.rad(side * -35))
+		local fin = MakeModelPart(model, "SideFin" .. (side < 0 and "L" or "R"), "WedgePart", Vector3.new(0.8 * scale, 0.2 * scale, 1 * scale), Vector3.new(side * 0.5 * scale, -0.05 * scale, 0.35 * scale), def.AccentColor)
+		fin.CFrame = CFrame.new(Vector3.new(side * 0.5 * scale, -0.05 * scale, 0.35 * scale)) * CFrame.Angles(0, 0, math.rad(side * -25))
 	end
 
-	-- Belly: a lighter flattened ball under the body, so the fish has a
-	-- two-tone body instead of one flat color.
-	local belly = MakeModelPart(model, "Belly", "Part", Vector3.new(0.9 * scale, 0.5 * scale, length * 0.8 * scale), Vector3.new(0, -0.25 * scale, 0), Lighten(def.BodyColor))
+	-- Belly: a lighter flattened ball under the body, WIDER than the body
+	-- at that height so it actually shows as a two-tone underside. The old
+	-- belly was narrower than the body and sat entirely inside it.
+	local belly = MakeModelPart(model, "Belly", "Part", Vector3.new(1.15 * scale, 0.55 * scale, length * 0.85 * scale), Vector3.new(0, -0.28 * scale, 0), Lighten(def.BodyColor))
 	belly.Shape = Enum.PartType.Ball
 
-	-- Eyes: two white balls with black pupils, front of the body.
+	-- Eyes: white balls sunk halfway into the head (they used to balance
+	-- on the surface, reading as separate balls), pupils on the outer face
+	-- so they read from the side, not just from the front.
 	for _, side in ipairs({ -1, 1 }) do
-		local eye = MakeModelPart(model, "Eye" .. (side < 0 and "L" or "R"), "Part", Vector3.new(0.3 * scale, 0.3 * scale, 0.3 * scale), Vector3.new(side * 0.4 * scale, 0.2 * scale, length / 2 * scale * 0.75), Color3.fromRGB(255, 255, 255))
+		local eye = MakeModelPart(model, "Eye" .. (side < 0 and "L" or "R"), "Part", Vector3.new(0.3 * scale, 0.3 * scale, 0.3 * scale), Vector3.new(side * 0.32 * scale, 0.18 * scale, length / 2 * scale * 0.75), Color3.fromRGB(255, 255, 255))
 		eye.Shape = Enum.PartType.Ball
-		local pupil = MakeModelPart(model, "Pupil" .. (side < 0 and "L" or "R"), "Part", Vector3.new(0.16 * scale, 0.16 * scale, 0.16 * scale), Vector3.new(side * 0.42 * scale, 0.22 * scale, length / 2 * scale * 0.75 + 0.12 * scale), Color3.fromRGB(20, 20, 20))
+		local pupil = MakeModelPart(model, "Pupil" .. (side < 0 and "L" or "R"), "Part", Vector3.new(0.16 * scale, 0.16 * scale, 0.16 * scale), Vector3.new(side * 0.44 * scale, 0.2 * scale, length / 2 * scale * 0.75 + 0.02 * scale), Color3.fromRGB(20, 20, 20))
 		pupil.Shape = Enum.PartType.Ball
 	end
 

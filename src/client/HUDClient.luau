@@ -5,6 +5,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContextActionService = game:GetService("ContextActionService")
 
 local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
 local FishDefinitions = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishDefinitions"))
@@ -21,6 +22,8 @@ local blessingLabel = nil
 local tanksLabel = nil
 local rebirthBadge = nil
 local rodBaitLabel = nil
+local holsterButton = nil
+local holstered = false
 local ladderRows = {}
 local questLines = {}
 local lockButton = nil
@@ -144,6 +147,30 @@ local function RefreshHUD(state)
 	end
 end
 
+-- The HOLSTER / DRAW button mirrors the server's holster state. Casting
+-- clears the holster on the server, which fires the state back here, so the
+-- button never goes stale.
+local function UpdateHolsterUI()
+	if holsterButton then
+		if holstered then
+			holsterButton.Text = "DRAW"
+			holsterButton.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
+		else
+			holsterButton.Text = "HOLSTER"
+			holsterButton.BackgroundColor3 = Color3.fromRGB(90, 100, 130)
+		end
+	end
+end
+
+local function ToggleHolster()
+	holstered = not holstered
+	UpdateHolsterUI()
+	GetRemote("RodHolster"):FireServer(holstered)
+	if holstered then
+		UIHelpers.ShowToast("Rod holstered — press H or tap DRAW to hold it again. Casting draws it automatically.", UIHelpers.TextDim, 3)
+	end
+end
+
 -- Shows the big catch banner in the middle of the screen.
 local function ShowCatchBanner(data)
 	local def = FishDefinitions.Fish[data.FishId]
@@ -213,9 +240,12 @@ function HUDClient.Init()
 
 	-- Rod + bait, bottom-left. Fixed size (the layout that provably renders);
 	-- the action buttons on the right shrink on narrow screens instead, so
-	-- the row never collides with this chip.
+	-- the row never collides with this chip. The HOLSTER button on the
+	-- right of the chip puts the rod away (H key does the same).
 	local gearPanel = UIHelpers.NewPanel(gui, "GearPanel", UDim2.fromOffset(300, 40), UDim2.new(0, 10, 1, -10), Vector2.new(0, 1))
-	rodBaitLabel = UIHelpers.NewLabel(gearPanel, "Gear", "Bamboo Rod  ·  Bread", UDim2.new(1, -16, 1, 0), UDim2.new(0, 8, 0, 0), 17, UIHelpers.TextWhite)
+	rodBaitLabel = UIHelpers.NewLabel(gearPanel, "Gear", "Bamboo Rod  ·  Bread", UDim2.new(1, -92, 1, 0), UDim2.new(0, 8, 0, 0), 17, UIHelpers.TextWhite)
+	holsterButton = UIHelpers.NewButton(gearPanel, "HolsterButton", "HOLSTER", UDim2.fromOffset(80, 28), UDim2.new(1, -6, 0.5, 0), Color3.fromRGB(90, 100, 130), 13, Vector2.new(1, 0.5))
+	holsterButton.MouseButton1Click:Connect(ToggleHolster)
 
 	-- Quest mini-panel above the gear panel.
 	local questPanel = UIHelpers.NewPanel(gui, "QuestMiniPanel", UDim2.fromOffset(300, 96), UDim2.new(0, 10, 1, -58), Vector2.new(0, 1))
@@ -307,6 +337,20 @@ function HUDClient.Init()
 	ClientState.Changed.Event:Connect(function(state)
 		RefreshHUD(state)
 	end)
+
+	-- Holster: H key (plus an on-screen button on touch devices) and the
+	-- server's state broadcast, which also fires when a cast draws the rod.
+	GetRemote("RodHolster").OnClientEvent:Connect(function(value)
+		holstered = value and true or false
+		UpdateHolsterUI()
+	end)
+	ContextActionService:BindAction("BrainrotHolster", function(_, inputState)
+		if inputState == Enum.UserInputState.Begin then
+			ToggleHolster()
+		end
+	end, true, Enum.KeyCode.H)
+	ContextActionService:SetTitle("BrainrotHolster", "HOLSTER")
+	ContextActionService:SetPosition("BrainrotHolster", UDim2.new(1, -70, 0.5, 0))
 
 	-- Feedback events -> toasts and banners.
 	GetRemote("CatchBanner").OnClientEvent:Connect(ShowCatchBanner)

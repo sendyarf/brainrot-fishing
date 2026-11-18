@@ -7,13 +7,27 @@
 -- equipping raises the right arm into the hold pose automatically, with no
 -- custom animation needed. The shaft points up along the Handle's +Y axis
 -- with the default grip, the classic held-rod look.
+--
+-- HOLSTER: the player can put the rod away (H key or the HOLSTER button in
+-- the HUD) — the tool goes back to the Backpack and stays there until the
+-- player draws it again or casts. The old behavior re-equipped the rod 0.3s
+-- after any unequip, so the rod could never be put away at all.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local GameConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("GameConfig"))
+local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
 local DataService = require(script.Parent:WaitForChild("DataService"))
 
 local RodToolService = {}
+
+-- holstered[player] = true while the rod is put away. The re-equip logic
+-- and purchases respect it; casting clears it (a cast needs the rod).
+local holstered = {}
+
+local function GetRemote(name)
+	return ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild(name)
+end
 
 -- Colors per rod tier (shaft, grip, reel, shaft material).
 local RodColors = {
@@ -111,10 +125,15 @@ function RodToolService.EquipRod(player)
 end
 
 -- Re-equips the rod if it is sitting unequipped in the Backpack.
+-- A cast calls this, and a cast needs the rod: it clears the holster.
 function RodToolService.EnsureEquipped(player)
 	local character = player.Character
 	if not character then
 		return
+	end
+	if holstered[player] then
+		holstered[player] = nil
+		GetRemote("RodHolster"):FireClient(player, false)
 	end
 	local tool = RodToolService.FindRodTool(player)
 	if tool and tool.Parent ~= character then
@@ -124,13 +143,37 @@ function RodToolService.EnsureEquipped(player)
 	end
 end
 
--- Rebuilds the rod after a purchase (new tier, new look).
+-- Rebuilds the rod after a purchase (new tier, new look). A holstered rod
+-- is rebuilt into the Backpack, not forced back into the hand.
 function RodToolService.RefreshRod(player)
 	local old = RodToolService.FindRodTool(player)
 	if old then
 		old:Destroy()
 	end
-	RodToolService.EquipRod(player)
+	if holstered[player] then
+		local data = DataService.GetData(player)
+		local tool = RodToolService.BuildRodTool(data and data.Rod or "Bamboo")
+		tool.Parent = player:FindFirstChild("Backpack") or player
+	else
+		RodToolService.EquipRod(player)
+	end
+end
+
+-- Puts the rod away (true) or draws it again (false). Called from the
+-- client's H key / HOLSTER button via the RodHolster remote. The state is
+-- fired back so the HUD button always matches the server.
+function RodToolService.SetHolstered(player, value)
+	holstered[player] = value and true or nil
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if value then
+		if humanoid then
+			humanoid:UnequipTools()
+		end
+	else
+		RodToolService.EquipRod(player)
+	end
+	GetRemote("RodHolster"):FireClient(player, value and true or false)
 end
 
 -- Hooks spawn + unequip for every player, including ones already in game.
@@ -147,14 +190,17 @@ function RodToolService.Init()
 			task.wait(0.1)
 		end
 		RodToolService.EquipRod(player)
+		-- A fresh spawn always starts with the rod in hand.
+		holstered[player] = nil
 		local humanoid = character:WaitForChild("Humanoid")
 		humanoid.Unequipped:Connect(function(tool)
-			if tool:GetAttribute("RodTool") then
+			if tool:GetAttribute("RodTool") and not holstered[player] then
 				-- The rod is the character's identity in a fishing game:
-				-- put it back in hand if the player toggles it off.
+				-- put it back in hand if the player toggles it off, unless
+				-- they deliberately holstered it (H key / HOLSTER button).
 				task.wait(0.3)
 				local backpack = player:FindFirstChild("Backpack")
-				if tool.Parent == backpack and character.Parent then
+				if tool.Parent == backpack and character.Parent and not holstered[player] then
 					RodToolService.EquipRod(player)
 				end
 			end
@@ -172,6 +218,9 @@ function RodToolService.Init()
 	for _, player in ipairs(Players:GetPlayers()) do
 		task.spawn(OnPlayerAdded, player)
 	end
+	Players.PlayerRemoving:Connect(function(player)
+		holstered[player] = nil
+	end)
 end
 
 return RodToolService

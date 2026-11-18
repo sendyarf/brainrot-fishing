@@ -41,6 +41,7 @@ local remoteNames = {
 	"DoRebirth",
 	"ClaimQuest",
 	"ClaimDaily",
+	"RodHolster",
 }
 for _, name in ipairs(remoteNames) do
 	local event = Instance.new("RemoteEvent")
@@ -91,6 +92,9 @@ GetRemote("DoRebirth").OnServerEvent:Connect(function(player)
 end)
 GetRemote("ClaimQuest").OnServerEvent:Connect(function(player, questId)
 	QuestService.ClaimQuestReward(player, questId)
+end)
+GetRemote("RodHolster").OnServerEvent:Connect(function(player, value)
+	RodToolService.SetHolstered(player, value)
 end)
 
 -- Daily reward: one claim per day, escalating with the streak (max 7 days).
