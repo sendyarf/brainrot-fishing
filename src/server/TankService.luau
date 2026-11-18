@@ -164,6 +164,43 @@ local function CreateTankVisual(player, tankIndex, tank)
 	glass.CanCollide = false
 	glass.Parent = folder
 
+	-- A Neon rim around the glass top edge in the fish's rarity color
+	-- (gold for a Golden mutation, white for Rainbow): a row of bases
+	-- reads as a rainbow from across the lake, and a thief can spot a
+	-- Mythic tank at a glance. The X-rims are 4.8 long so their ends
+	-- meet the Z-rims' inner faces exactly (no overlap, no z-fight).
+	local rimColor = def and FishDefinitions.RarityColors[def.Rarity] or Color3.fromRGB(200, 200, 200)
+	if tank.Mutation == "Golden" then
+		rimColor = Color3.fromRGB(255, 210, 60)
+	elseif tank.Mutation == "Rainbow" then
+		rimColor = Color3.fromRGB(255, 255, 255)
+	end
+	local rim = Instance.new("Folder")
+	rim.Name = "RarityRim"
+	rim.Parent = folder
+	for _, z in ipairs({ -2.5, 2.5 }) do
+		local edge = Instance.new("Part")
+		edge.Name = "RimX"
+		edge.Size = Vector3.new(4.8, 0.15, 0.2)
+		edge.Position = center + Vector3.new(0, 2.475, z)
+		edge.Color = rimColor
+		edge.Material = Enum.Material.Neon
+		edge.Anchored = true
+		edge.CanCollide = false
+		edge.Parent = rim
+	end
+	for _, x in ipairs({ -2.5, 2.5 }) do
+		local edge = Instance.new("Part")
+		edge.Name = "RimZ"
+		edge.Size = Vector3.new(0.2, 0.15, 5.4)
+		edge.Position = center + Vector3.new(x, 2.475, 0)
+		edge.Color = rimColor
+		edge.Material = Enum.Material.Neon
+		edge.Anchored = true
+		edge.CanCollide = false
+		edge.Parent = rim
+	end
+
 	local water = Instance.new("Part")
 	water.Name = "TankWater"
 	water.Size = Vector3.new(4.7, 3.9, 4.7)

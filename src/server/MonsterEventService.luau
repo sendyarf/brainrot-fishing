@@ -74,17 +74,53 @@ local function SetMonsterVisible(shadowOnly, fullyVisible)
 	end
 end
 
--- Darkens the sky for the warning/event, restores it after.
-local function SetSkyDark(dark)
+-- The sky is a mood signal (top-1 games tint it per event): red-orange
+-- while the monster is out, golden while the Calm Water Blessing is
+-- active, warm sunset otherwise. Normal matches the values the world
+-- was built with (WorldBuilder only sets the Atmosphere, never Lighting,
+-- so Ambient/OutdoorAmbient are the engine defaults 128,128,128).
+local SKY = {
+	Normal = {
+		ClockTime = 17.6,
+		Brightness = 2.4,
+		FogColor = Color3.fromRGB(235, 158, 140),
+		Ambient = Color3.fromRGB(128, 128, 128),
+		OutdoorAmbient = Color3.fromRGB(128, 128, 128),
+		AtmosphereColor = Color3.fromRGB(255, 170, 130),
+		AtmosphereDecay = Color3.fromRGB(140, 90, 160),
+	},
+	Wave = {
+		ClockTime = 19.2,
+		Brightness = 1.0,
+		FogColor = Color3.fromRGB(180, 60, 40),
+		Ambient = Color3.fromRGB(90, 30, 30),
+		OutdoorAmbient = Color3.fromRGB(140, 50, 40),
+		AtmosphereColor = Color3.fromRGB(255, 100, 60),
+		AtmosphereDecay = Color3.fromRGB(120, 40, 60),
+	},
+	Blessing = {
+		ClockTime = 17.6,
+		Brightness = 2.8,
+		FogColor = Color3.fromRGB(255, 210, 120),
+		Ambient = Color3.fromRGB(255, 225, 170),
+		OutdoorAmbient = Color3.fromRGB(255, 215, 140),
+		AtmosphereColor = Color3.fromRGB(255, 210, 130),
+		AtmosphereDecay = Color3.fromRGB(180, 130, 80),
+	},
+}
+
+local function SetSky(mode)
+	local s = SKY[mode] or SKY.Normal
 	local lighting = game:GetService("Lighting")
-	if dark then
-		lighting.ClockTime = 19.2
-		lighting.Brightness = 1.2
-		lighting.FogColor = Color3.fromRGB(90, 70, 110)
-	else
-		lighting.ClockTime = 17.6
-		lighting.Brightness = 2.4
-		lighting.FogColor = Color3.fromRGB(235, 158, 140)
+	lighting.ClockTime = s.ClockTime
+	lighting.Brightness = s.Brightness
+	lighting.FogColor = s.FogColor
+	lighting.Ambient = s.Ambient
+	lighting.OutdoorAmbient = s.OutdoorAmbient
+	local atmosphere = lighting:FindFirstChild("SunsetHaze")
+	if atmosphere then
+		atmosphere.Color = s.AtmosphereColor
+		atmosphere.Decay = s.AtmosphereDecay
 	end
 end
 
@@ -92,7 +128,7 @@ end
 function MonsterEventService.StartMonsterEvent()
 	MonsterState.SetPhase("Warning")
 	SetMonsterVisible(true, false)
-	SetSkyDark(true)
+	SetSky("Wave")
 	GetRemote("MonsterEvent"):FireAllClients("warning", { Seconds = GameConfig.MonsterWarningSeconds })
 	task.wait(GameConfig.MonsterWarningSeconds)
 
@@ -106,7 +142,7 @@ function MonsterEventService.StartMonsterEvent()
 	MonsterState.SetPhase("Calm")
 	MonsterState.SetActive(false)
 	SetMonsterVisible(false, false)
-	SetSkyDark(false)
+	SetSky("Blessing")
 	-- Calm Water Blessing: +10% luck for 60 seconds for everyone.
 	for _, player in ipairs(Players:GetPlayers()) do
 		local data = DataService.GetData(player)
@@ -116,6 +152,16 @@ function MonsterEventService.StartMonsterEvent()
 	end
 	GetRemote("MonsterEvent"):FireAllClients("ended", { Seconds = GameConfig.BlessingDuration })
 	DataService.BroadcastAll()
+	-- Golden sky while the blessing lasts, then back to the normal
+	-- sunset. The phase check guards against a new wave starting
+	-- inside the 60 seconds (the scheduler waits 4-6 minutes, so it
+	-- should not happen — but a stuck golden sky would be worse).
+	task.spawn(function()
+		task.wait(GameConfig.BlessingDuration)
+		if MonsterState.GetPhase() == "Calm" then
+			SetSky("Normal")
+		end
+	end)
 end
 
 -- Schedules the next event, then loops forever. The FIRST wave comes after
@@ -140,6 +186,7 @@ function MonsterEventService.ScheduleNextEvent()
 				warn("[BrainrotFishing] Monster event failed: " .. tostring(err))
 				MonsterState.SetPhase("Calm")
 				MonsterState.SetActive(false)
+				SetSky("Normal")
 			end
 		end
 	end)

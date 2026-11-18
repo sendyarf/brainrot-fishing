@@ -152,10 +152,20 @@ local function BuildPier(world)
 		MakeLantern(pier, Vector3.new(-3.4, 1, z))
 		MakeLantern(pier, Vector3.new(3.4, 1, z))
 	end
+	-- Zone marker strips across the pier (Neon, no light, no collision):
+	-- cyan where the Shallow Shore zone starts, blue where the Deep Dock
+	-- zone starts. Each spot reads as its own color from across the lake.
+	local shallowStrip = MakePart(pier, "ZoneStripShallow", "Part", Vector3.new(6.4, 0.2, 0.4), Vector3.new(0, 1.05, 24), Color3.fromRGB(80, 255, 220), Enum.Material.Neon)
+	shallowStrip.CanCollide = false
+	local deepStrip = MakePart(pier, "ZoneStripDeep", "Part", Vector3.new(6.4, 0.2, 0.4), Vector3.new(0, 1.05, -64), Color3.fromRGB(60, 180, 255), Enum.Material.Neon)
+	deepStrip.CanCollide = false
 	-- Wide platform at the pier end (Deep Dock).
 	for x = -4, 4, 4 do
 		MakePlank(pier, "DockPlank", Vector3.new(4, 0.6, 10), Vector3.new(x, 0.7, -68))
 	end
+	-- Blue Neon edge on the dock's far side.
+	local dockEdge = MakePart(pier, "DockEdge", "Part", Vector3.new(12, 0.3, 0.4), Vector3.new(0, 1.1, -73), Color3.fromRGB(60, 180, 255), Enum.Material.Neon)
+	dockEdge.CanCollide = false
 end
 
 -- Builds the diagonal wooden bridge from the pier to Abyss Island.
@@ -185,6 +195,14 @@ local function BuildIsland(world, center, kind)
 	local sand = MakePart(island, "IslandSand", "Part", Vector3.new(4.5, 26, 26), center + Vector3.new(0, -1.3, 0), Color3.fromRGB(230, 210, 150), Enum.Material.Sand)
 	sand.Shape = Enum.PartType.Cylinder
 	sand.CFrame = CFrame.new(center + Vector3.new(0, -1.3, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	-- A glowing ring around the island's base in the zone's accent color
+	-- (purple for the Abyss, gold for the Royal Pond): 27 wide, so it
+	-- sticks out 0.5 studs past the 26-wide sand and reads from the pier.
+	local ringColor = kind == "Abyss" and Color3.fromRGB(170, 80, 255) or Color3.fromRGB(255, 214, 90)
+	local ring = MakePart(island, "IslandRing", "Part", Vector3.new(0.3, 27, 27), center + Vector3.new(0, 0.8, 0), ringColor, Enum.Material.Neon)
+	ring.Shape = Enum.PartType.Cylinder
+	ring.CFrame = CFrame.new(center + Vector3.new(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	ring.CanCollide = false
 	if kind == "Abyss" then
 		MakeRock(island, center + Vector3.new(-6, 1, -4), 2.2)
 		MakeRock(island, center + Vector3.new(7, 1, 5), 1.6)
@@ -206,6 +224,32 @@ local function BuildIsland(world, center, kind)
 		MakeSign(island, center + Vector3.new(0, 1, 8), "ROYAL POND", "Rebirth anglers only.", Color3.fromRGB(255, 220, 100))
 	end
 	return island
+end
+
+-- Glowing buoys in the lake, one saturated accent color per spot (Neon,
+-- no PointLight, so they are cheap): cyan Shallow, bright-blue Deep,
+-- purple Abyss, gold Royal. Positions are hand-checked: clear of the
+-- pier (x -3..3), the dock (x -6..6, z -73..-63), the bridge, and the
+-- 26-wide islands (Abyss/Royal buoys sit at radius 16, outside the
+-- island's radius 13).
+local BuoyZones = {
+	{ Color = Color3.fromRGB(80, 255, 220), Positions = { Vector3.new(14, 0.6, 22), Vector3.new(-6, 0.6, 22), Vector3.new(5, 0.6, 12) } },
+	{ Color = Color3.fromRGB(60, 180, 255), Positions = { Vector3.new(-10, 0.6, -62), Vector3.new(10, 0.6, -62), Vector3.new(-7, 0.6, -72) } },
+	{ Color = Color3.fromRGB(170, 80, 255), Positions = { Vector3.new(-54, 0.6, -95), Vector3.new(-86, 0.6, -95), Vector3.new(-70, 0.6, -79) } },
+	{ Color = Color3.fromRGB(255, 214, 90), Positions = { Vector3.new(54, 0.6, -95), Vector3.new(86, 0.6, -95), Vector3.new(70, 0.6, -79) } },
+}
+
+local function BuildBuoys(world)
+	local buoys = Instance.new("Folder")
+	buoys.Name = "Buoys"
+	buoys.Parent = world
+	for _, zone in ipairs(BuoyZones) do
+		for _, pos in ipairs(zone.Positions) do
+			local buoy = MakePart(buoys, "Buoy", "Part", Vector3.new(1.6, 1.6, 1.6), pos, zone.Color, Enum.Material.Neon)
+			buoy.Shape = Enum.PartType.Ball
+			buoy.CanCollide = false
+		end
+	end
 end
 
 -- One accent color per base (10 plots): the roof, the header beam and the
@@ -382,6 +426,7 @@ function WorldBuilder.BuildWorld()
 	BuildBridge(world)
 	BuildIsland(world, Vector3.new(-70, 0, -95), "Abyss")
 	BuildIsland(world, Vector3.new(70, 0, -95), "Royal")
+	BuildBuoys(world)
 	BuildBoat(world)
 
 	-- Spawn: right on the pier, rod already in hand.
