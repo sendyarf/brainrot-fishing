@@ -71,65 +71,58 @@ local function UpdatePlotSign(player)
 	end
 end
 
-local function BuildTankLabel(glass, fishId, mutation, income, locked, tankIndex)
+local function BuildTankLabel(glass, fishId, mutation, income, tankIndex)
 	local def = FishDefinitions.Fish[fishId]
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "TankLabel"
-	gui.Size = UDim2.fromOffset(150, 72)
-	-- Three staggered label heights, so neighbouring tanks never collide
-	-- even when five tanks in a row are viewed at an angle (the old two
-	-- heights still stacked into an unreadable jumble). Labels are narrower
-	-- too: at 5.2-stud tank spacing, a 180px label is wider than the gap
-	-- between two tanks on screen.
-	local labelHeights = { 2.6, 3.5, 4.4 }
-	gui.StudsOffset = Vector3.new(0, labelHeights[(tankIndex - 1) % 3 + 1], 0)
-	gui.MaxDistance = 45
+	-- Compact two-line label (was 150x72 with three lines): at 11/11 tanks
+	-- the old labels were wider than the gap between tanks and stacked into
+	-- an unreadable jumble (playtest 19 Nov). Line 1 = name, line 2 =
+	-- rarity + $/s. The lock state is NOT in the label anymore — the gold
+	-- padlock block on top of the tank already shows it.
+	gui.Size = UDim2.fromOffset(130, 44)
+	-- Stagger by GRID position, not tank index: row = (index-1)//4, col =
+	-- (index-1)%4, height = heights[(row+col)%3+1]. The old index%3 stagger
+	-- repeated every 3 tanks, so tanks in adjacent rows shared a height and
+	-- still collided on screen. With (row+col)%3, any two tanks that share
+	-- a row or a column always sit at different heights.
+	local row = math.floor((tankIndex - 1) / 4)
+	local col = (tankIndex - 1) % 4
+	local labelHeights = { 2.6, 3.7, 4.8 }
+	gui.StudsOffset = Vector3.new(0, labelHeights[(row + col) % 3 + 1], 0)
+	gui.MaxDistance = 35
 	gui.AlwaysOnTop = true
 	gui.Parent = glass
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "NameLine"
-	nameLabel.Size = UDim2.new(1, 0, 0.38, 0)
+	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = def.Name
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.TextSize = 17
+	nameLabel.TextSize = 14
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextStrokeTransparency = 0.3
 	nameLabel.Parent = gui
 
-	local rarityLabel = Instance.new("TextLabel")
-	rarityLabel.Name = "RarityLine"
-	rarityLabel.Position = UDim2.new(0, 0, 0.38, 0)
-	rarityLabel.Size = UDim2.new(1, 0, 0.31, 0)
-	rarityLabel.BackgroundTransparency = 1
-	local rarityText = def.Rarity:upper()
+	local infoLabel = Instance.new("TextLabel")
+	infoLabel.Name = "InfoLine"
+	infoLabel.Position = UDim2.new(0, 0, 0.5, 0)
+	infoLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	infoLabel.BackgroundTransparency = 1
+	local infoText = def.Rarity:upper()
 	if mutation == "Golden" then
-		rarityText = "GOLDEN " .. rarityText
+		infoText = "GOLDEN " .. infoText
 	elseif mutation == "Rainbow" then
-		rarityText = "RAINBOW " .. rarityText
+		infoText = "RAINBOW " .. infoText
 	end
-	if locked then
-		rarityText = rarityText .. "  [LOCKED]"
-	end
-	rarityLabel.Text = rarityText
-	rarityLabel.TextColor3 = FishDefinitions.RarityColors[def.Rarity]
-	rarityLabel.TextSize = 14
-	rarityLabel.Font = Enum.Font.GothamBold
-	rarityLabel.TextStrokeTransparency = 0.3
-	rarityLabel.Parent = gui
-
-	local incomeLabel = Instance.new("TextLabel")
-	incomeLabel.Name = "IncomeLine"
-	incomeLabel.Position = UDim2.new(0, 0, 0.69, 0)
-	incomeLabel.Size = UDim2.new(1, 0, 0.31, 0)
-	incomeLabel.BackgroundTransparency = 1
-	incomeLabel.Text = "$" .. income .. "/s"
-	incomeLabel.TextColor3 = Color3.fromRGB(120, 255, 140)
-	incomeLabel.TextSize = 15
-	incomeLabel.Font = Enum.Font.GothamBold
-	incomeLabel.TextStrokeTransparency = 0.3
-	incomeLabel.Parent = gui
+	infoText = infoText .. " · $" .. income .. "/s"
+	infoLabel.Text = infoText
+	infoLabel.TextColor3 = FishDefinitions.RarityColors[def.Rarity]
+	infoLabel.TextSize = 12
+	infoLabel.Font = Enum.Font.GothamBold
+	infoLabel.TextStrokeTransparency = 0.3
+	infoLabel.Parent = gui
 
 	return gui
 end
@@ -226,7 +219,7 @@ local function CreateTankVisual(player, tankIndex, tank)
 		swimRadius = math.clamp(2.5 - GetModelReach(fishModel) - 0.1, 0.12, 0.55)
 	end
 
-	local label = BuildTankLabel(glass, tank.FishId, tank.Mutation, income, locked, tankIndex)
+	local label = BuildTankLabel(glass, tank.FishId, tank.Mutation, income, tankIndex)
 
 	-- Gold padlock block on top of the tank, visible while the base is locked.
 	local lockPart = Instance.new("Part")
@@ -374,36 +367,19 @@ function TankService.GetCheapestTankIndex(player)
 	return cheapestIndex
 end
 
--- Shows or hides the lock visuals on all of a player's tanks.
+-- Shows or hides the lock visuals on all of a player's tanks. The label no
+-- longer carries [LOCKED] (fix 13) — the gold padlock block is the indicator.
 function TankService.SetLockVisual(player, locked)
 	local visuals = tankVisuals[player]
 	if not visuals then
 		return
 	end
-	local data = DataService.GetData(player)
-	for i, visual in ipairs(visuals) do
+	for _, visual in ipairs(visuals) do
 		if visual.LockPart then
 			visual.LockPart.Transparency = locked and 0 or 1
 		end
 		if visual.Prompt then
 			visual.Prompt.Enabled = not locked
-		end
-		if visual.Label and data and data.Tanks[i] then
-			local tank = data.Tanks[i]
-			local def = FishDefinitions.Fish[tank.FishId]
-			local rarityLine = visual.Label:FindFirstChild("RarityLine")
-			if rarityLine and def then
-				local text = def.Rarity:upper()
-				if tank.Mutation == "Golden" then
-					text = "GOLDEN " .. text
-				elseif tank.Mutation == "Rainbow" then
-					text = "RAINBOW " .. text
-				end
-				if locked then
-					text = text .. "  [LOCKED]"
-				end
-				rarityLine.Text = text
-			end
 		end
 	end
 end
