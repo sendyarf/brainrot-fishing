@@ -479,7 +479,11 @@ function FishingClient.Init()
 						promptLabel.Text = "Press E to Cast  —  " .. spot.Name
 						promptLabel.TextColor3 = UIHelpers.TextWhite
 					else
-						promptLabel.Text = spot.Name .. "  —  Locked (" .. UIHelpers.FormatMoney(spot.Price) .. " in the Shop)"
+						if spotId == "Royal" then
+							promptLabel.Text = spot.Name .. "  —  Locked (Rebirth to unlock)"
+						else
+							promptLabel.Text = spot.Name .. "  —  Locked (" .. UIHelpers.FormatMoney(spot.Price) .. " in the Shop)"
+						end
 						promptLabel.TextColor3 = UIHelpers.AccentGold
 					end
 					promptLabel.Visible = true

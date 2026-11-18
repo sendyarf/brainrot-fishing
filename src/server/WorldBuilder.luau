@@ -213,18 +213,18 @@ local function BuildBasePlot(world, index, center)
 	local plot = Instance.new("Folder")
 	plot.Name = "BasePlot" .. index
 	plot.Parent = world
-	-- Grass pad under the plot.
-	MakePart(plot, "PlotPad", "Part", Vector3.new(20, 0.4, 12), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(110, 190, 90), Enum.Material.Grass)
+	-- Grass pad under the plot (28 x 18: room for 2 rows of big tanks).
+	MakePart(plot, "PlotPad", "Part", Vector3.new(28, 0.4, 18), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(110, 190, 90), Enum.Material.Grass)
 	-- Low wooden fence around three sides (open toward the lake).
-	MakePart(plot, "FenceBack", "Part", Vector3.new(20, 1.2, 0.4), center + Vector3.new(0, 0.8, 6), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceLeft", "Part", Vector3.new(0.4, 1.2, 12), center + Vector3.new(-10, 0.8, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
-	MakePart(plot, "FenceRight", "Part", Vector3.new(0.4, 1.2, 12), center + Vector3.new(10, 0.8, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceBack", "Part", Vector3.new(28, 1.2, 0.4), center + Vector3.new(0, 0.8, 9), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceLeft", "Part", Vector3.new(0.4, 1.2, 18), center + Vector3.new(-14, 0.8, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	MakePart(plot, "FenceRight", "Part", Vector3.new(0.4, 1.2, 18), center + Vector3.new(14, 0.8, 0), Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
 	-- Owner sign (the name is filled in when a player claims the plot).
-	local sign = MakeSign(plot, center + Vector3.new(0, 0, 7.5), "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170))
+	local sign = MakeSign(plot, center + Vector3.new(0, 0, 10.5), "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170))
 	sign.Name = "OwnerSign"
 	-- Tank anchor pads (12): small stone slabs the glass tanks sit on.
 	for i, offset in ipairs(GameConfig.TankAnchors) do
-		MakePart(plot, "TankPad" .. i, "Part", Vector3.new(2.8, 0.3, 2.2), center + offset + Vector3.new(0, 0.55, 0), Color3.fromRGB(200, 200, 210), Enum.Material.Slate)
+		MakePart(plot, "TankPad" .. i, "Part", Vector3.new(4.4, 0.3, 4.4), center + offset + Vector3.new(0, 0.55, 0), Color3.fromRGB(200, 200, 210), Enum.Material.Slate)
 	end
 	return plot
 end
@@ -245,25 +245,34 @@ local function BuildMonster(world)
 	shadow.Shape = Enum.PartType.Ball
 	shadow.Transparency = 1
 	shadow.CanCollide = false
-	local fin = MakePart(folder, "MonsterFin", "WedgePart", Vector3.new(8, 12, 1.5), Vector3.new(18, 3, -45), Color3.fromRGB(20, 120, 70), Enum.Material.SmoothPlastic)
+	local fin = MakePart(folder, "MonsterFin", "WedgePart", Vector3.new(8, 12, 1.5), Vector3.new(18, 3, -45), Color3.fromRGB(60, 255, 130), Enum.Material.Neon)
 	fin.Transparency = 1
 	fin.CanCollide = false
-	local eyeLeft = MakePart(folder, "MonsterEyeLeft", "Part", Vector3.new(3, 3, 3), Vector3.new(15, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
+	local eyeLeft = MakePart(folder, "MonsterEyeLeft", "Part", Vector3.new(3.5, 3.5, 3.5), Vector3.new(15, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
 	eyeLeft.Shape = Enum.PartType.Ball
 	eyeLeft.Transparency = 1
 	eyeLeft.CanCollide = false
-	local eyeRight = MakePart(folder, "MonsterEyeRight", "Part", Vector3.new(3, 3, 3), Vector3.new(21, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
+	local eyeRight = MakePart(folder, "MonsterEyeRight", "Part", Vector3.new(3.5, 3.5, 3.5), Vector3.new(21, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
 	eyeRight.Shape = Enum.PartType.Ball
 	eyeRight.Transparency = 1
 	eyeRight.CanCollide = false
+	-- A red glow disc on the water under the monster: the dark fin on dark
+	-- night water was still invisible in playtests, so the event now has a
+	-- glowing red halo on the surface plus a Neon green fin.
+	local glowDisc = MakePart(folder, "MonsterGlowDisc", "Part", Vector3.new(0.3, 40, 24), Vector3.new(18, 0.6, -43), Color3.fromRGB(255, 60, 40), Enum.Material.Neon)
+	glowDisc.Shape = Enum.PartType.Cylinder
+	-- Cylinder axis is X by default; rotate it flat (axis vertical).
+	glowDisc.CFrame = CFrame.new(Vector3.new(18, 0.6, -43)) * CFrame.Angles(0, 0, math.rad(90))
+	glowDisc.Transparency = 1
+	glowDisc.CanCollide = false
 	local glow = Instance.new("PointLight")
 	glow.Name = "MonsterGlow"
 	glow.Color = Color3.fromRGB(255, 60, 40)
-	glow.Brightness = 3
-	glow.Range = 40
+	glow.Brightness = 5
+	glow.Range = 60
 	glow.Enabled = false
 	glow.Parent = fin
-	monsterParts = { Shadow = shadow, Fin = fin, EyeLeft = eyeLeft, EyeRight = eyeRight, Glow = glow }
+	monsterParts = { Shadow = shadow, Fin = fin, EyeLeft = eyeLeft, EyeRight = eyeRight, Glow = glow, GlowDisc = glowDisc }
 end
 
 -- A small wooden rowboat floating near the pier.
@@ -320,8 +329,8 @@ function WorldBuilder.BuildWorld()
 		patchLight.Brightness = 1.5
 		patchLight.Range = 20
 		patchLight.Parent = patch
-		local beam = MakePart(world, spotId .. "Beam", "Part", Vector3.new(1.4, 44, 1.4), Vector3.new(spot.Position.X, 22, spot.Position.Z), spot.WaterColor, Enum.Material.Neon)
-		beam.Transparency = 0.55
+		local beam = MakePart(world, spotId .. "Beam", "Part", Vector3.new(1, 44, 1), Vector3.new(spot.Position.X, 22, spot.Position.Z), spot.WaterColor, Enum.Material.Neon)
+		beam.Transparency = 0.65
 		beam.CanCollide = false
 	end
 
@@ -344,9 +353,13 @@ function WorldBuilder.BuildWorld()
 	spawn.AllowTeamChangeOnTouch = false
 	spawn.Parent = world
 
-	-- Spot signs.
+	-- Spot signs (descriptive text, no prices: the price lives in the Shop,
+	-- and a sign saying "$500" after the player already bought the spot was
+	-- confusing).
 	MakeSign(world, Vector3.new(6, 0, 26), "SHALLOW SHORE", "Free fishing. Start here!", Color3.fromRGB(140, 240, 210))
-	MakeSign(world, Vector3.new(5, 1, -60), "DEEP DOCK", "Deeper water. $500 in the Shop.", Color3.fromRGB(120, 190, 255))
+	MakeSign(world, Vector3.new(5, 1, -60), "DEEP DOCK", "Deeper water. Rare fish live here.", Color3.fromRGB(120, 190, 255))
+	MakeSign(world, Vector3.new(-65, 0, -90), "ABYSS POINT", "The deep dark. Legends lurk below.", Color3.fromRGB(90, 130, 255))
+	MakeSign(world, Vector3.new(65, 0, -90), "ROYAL POND", "Rebirth to fish here. Mythic 10%!", Color3.fromRGB(255, 214, 90))
 
 	-- Quest board + top anglers board at the foot of the pier.
 	MakeSign(world, Vector3.new(-9, 0, 28), "QUEST BOARD", "3 daily quests. Big rewards!", Color3.fromRGB(255, 220, 120))

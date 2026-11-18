@@ -168,7 +168,7 @@ end
 
 function ShopClient.Init()
 	local gui = player:WaitForChild("PlayerGui"):WaitForChild("BrainrotFishingGui")
-	panel = UIHelpers.NewPanel(gui, "ShopPanel", UDim2.fromOffset(660, 480), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
+	panel = UIHelpers.NewPanel(gui, "ShopPanel", UIHelpers.FitPanelSize(660, 480), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
 	panel.Visible = false
 	UIHelpers.NewLabel(panel, "Title", "SHOP", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 8), 26, UIHelpers.AccentGold).TextXAlignment = Enum.TextXAlignment.Center
 	local closeButton = UIHelpers.NewButton(panel, "Close", "X", UDim2.fromOffset(36, 36), UDim2.new(1, -10, 0, 8), Color3.fromRGB(200, 60, 60), 18, Vector2.new(1, 0))

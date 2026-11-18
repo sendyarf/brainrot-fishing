@@ -69,6 +69,9 @@ local function SetMonsterVisible(shadowOnly, fullyVisible)
 	parts.Fin.Transparency = fullyVisible and 0 or 1
 	parts.EyeLeft.Transparency = fullyVisible and 0 or 1
 	parts.EyeRight.Transparency = fullyVisible and 0 or 1
+	if parts.GlowDisc then
+		parts.GlowDisc.Transparency = (shadowOnly or fullyVisible) and 0.55 or 1
+	end
 	if parts.Glow then
 		parts.Glow.Enabled = fullyVisible
 	end

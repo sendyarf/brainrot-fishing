@@ -51,6 +51,17 @@ function UIHelpers.NewPanel(parent, name, size, position, anchorPoint)
 	return frame
 end
 
+-- Fits a modal panel to the player's actual viewport: the designed size, but
+-- never wider or taller than the screen minus a 24px margin. The modals were
+-- fixed 660x480 / 640x480 / 560x380 offsets, which overflowed smaller
+-- windows — on a ~480-tall viewport the SHOP/DEX panels filled the whole
+-- screen with the title and X cut off (playtest 19 Nov 03:43).
+function UIHelpers.FitPanelSize(width, height)
+	local camera = game:GetService("Workspace").CurrentCamera
+	local view = camera and camera.ViewportSize or Vector2.new(1024, 600)
+	return UDim2.fromOffset(math.min(width, view.X - 24), math.min(height, view.Y - 24))
+end
+
 -- A bold text label (transparent background).
 function UIHelpers.NewLabel(parent, name, text, size, position, textSize, textColor, anchorPoint)
 	local label = Instance.new("TextLabel")

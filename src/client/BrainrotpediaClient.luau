@@ -18,6 +18,59 @@ local grid = nil
 local headerLabel = nil
 local isOpen = false
 
+-- A tiny fish icon: body oval + tail diamond + eye (or a dark silhouette
+-- when uncaught). The old plain grey oval read as a blob, not a fish.
+local function MakeFishIcon(parent, def, discovered)
+	local icon = Instance.new("Frame")
+	icon.Name = "FishIcon"
+	icon.Size = UDim2.fromOffset(64, 34)
+	icon.Position = UDim2.new(0.5, 0, 0, 10)
+	icon.AnchorPoint = Vector2.new(0.5, 0)
+	icon.BackgroundTransparency = 1
+	icon.Parent = parent
+	local bodyColor = discovered and def.BodyColor or Color3.fromRGB(40, 40, 55)
+	local accentColor = discovered and def.AccentColor or Color3.fromRGB(40, 40, 55)
+	local tail = Instance.new("Frame")
+	tail.Size = UDim2.fromOffset(16, 16)
+	tail.Position = UDim2.new(0, 0, 0.5, 0)
+	tail.AnchorPoint = Vector2.new(0, 0.5)
+	tail.Rotation = 45
+	tail.BackgroundColor3 = accentColor
+	tail.BorderSizePixel = 0
+	tail.Parent = icon
+	local body = Instance.new("Frame")
+	body.Size = UDim2.fromOffset(46, 30)
+	body.Position = UDim2.new(0, 12, 0.5, 0)
+	body.AnchorPoint = Vector2.new(0, 0.5)
+	body.BackgroundColor3 = bodyColor
+	body.BorderSizePixel = 0
+	body.Parent = icon
+	local bodyCorner = Instance.new("UICorner")
+	bodyCorner.CornerRadius = UDim.new(0.5, 0)
+	bodyCorner.Parent = body
+	if discovered then
+		local eye = Instance.new("Frame")
+		eye.Size = UDim2.fromOffset(8, 8)
+		eye.Position = UDim2.new(0, 46, 0, 8)
+		eye.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		eye.BorderSizePixel = 0
+		eye.Parent = icon
+		local eyeCorner = Instance.new("UICorner")
+		eyeCorner.CornerRadius = UDim.new(0.5, 0)
+		eyeCorner.Parent = eye
+		local pupil = Instance.new("Frame")
+		pupil.Size = UDim2.fromOffset(4, 4)
+		pupil.Position = UDim2.new(0, 48, 0, 10)
+		pupil.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		pupil.BorderSizePixel = 0
+		pupil.Parent = icon
+		local pupilCorner = Instance.new("UICorner")
+		pupilCorner.CornerRadius = UDim.new(0.5, 0)
+		pupilCorner.Parent = pupil
+	end
+	return icon
+end
+
 local function RefreshDex()
 	if not grid then
 		return
@@ -53,17 +106,7 @@ local function RefreshDex()
 		stroke.Color = best and FishDefinitions.RarityColors[def.Rarity] or Color3.fromRGB(70, 70, 90)
 		stroke.Thickness = 2
 		stroke.Parent = card
-		-- A color chip showing the fish's body color (or a dark "?" when uncaught).
-		local chip = Instance.new("Frame")
-		chip.Size = UDim2.fromOffset(54, 34)
-		chip.Position = UDim2.new(0.5, 0, 0, 10)
-		chip.AnchorPoint = Vector2.new(0.5, 0)
-		chip.BackgroundColor3 = best and def.BodyColor or Color3.fromRGB(40, 40, 55)
-		chip.BorderSizePixel = 0
-		chip.Parent = card
-		local chipCorner = Instance.new("UICorner")
-		chipCorner.CornerRadius = UDim.new(0.5, 0)
-		chipCorner.Parent = chip
+		MakeFishIcon(card, def, best ~= nil)
 		UIHelpers.NewLabel(card, "Name", best and def.Name or "???", UDim2.new(1, -12, 0, 26), UDim2.new(0, 6, 0, 50), 17, best and UIHelpers.TextWhite or UIHelpers.TextDim).TextXAlignment = Enum.TextXAlignment.Center
 		UIHelpers.NewLabel(card, "Rarity", best and def.Rarity:upper() or "UNDISCOVERED", UDim2.new(1, -12, 0, 20), UDim2.new(0, 6, 0, 76), 14, best and FishDefinitions.RarityColors[def.Rarity] or UIHelpers.TextDim).TextXAlignment = Enum.TextXAlignment.Center
 		UIHelpers.NewLabel(card, "Income", best and ("Best: " .. UIHelpers.FormatMoney(best) .. "/s") or "Catch it to reveal", UDim2.new(1, -12, 0, 20), UDim2.new(0, 6, 0, 96), 13, best and UIHelpers.AccentGreen or UIHelpers.TextDim).TextXAlignment = Enum.TextXAlignment.Center
@@ -82,7 +125,7 @@ end
 
 function BrainrotpediaClient.Init()
 	local gui = player:WaitForChild("PlayerGui"):WaitForChild("BrainrotFishingGui")
-	panel = UIHelpers.NewPanel(gui, "DexPanel", UDim2.fromOffset(640, 480), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
+	panel = UIHelpers.NewPanel(gui, "DexPanel", UIHelpers.FitPanelSize(640, 480), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
 	panel.Visible = false
 	headerLabel = UIHelpers.NewLabel(panel, "Title", "BRAINROTPEDIA  0/9", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 8), 24, UIHelpers.AccentGold)
 	headerLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -91,11 +134,16 @@ function BrainrotpediaClient.Init()
 		BrainrotpediaClient.Toggle()
 	end)
 	UIHelpers.NewLabel(panel, "Bonus", "Catch all 9 fish: +" .. UIHelpers.FormatMoney(GameConfig.CollectionBonus) .. " and the MASTER ANGLER title!", UDim2.new(1, -20, 0, 24), UDim2.new(0, 10, 0, 46), 15, UIHelpers.TextDim).TextXAlignment = Enum.TextXAlignment.Center
-	grid = Instance.new("Frame")
+	-- The grid scrolls: on a short viewport the fitted panel is too small
+	-- for all 3 card rows, and the bottom row used to be cut off.
+	grid = Instance.new("ScrollingFrame")
 	grid.Name = "DexGrid"
 	grid.Size = UDim2.new(1, -20, 1, -80)
 	grid.Position = UDim2.new(0, 10, 0, 74)
 	grid.BackgroundTransparency = 1
+	grid.BorderSizePixel = 0
+	grid.ScrollBarThickness = 6
+	grid.CanvasSize = UDim2.new(0, 0, 0, 394)
 	grid.Parent = panel
 	ClientState.Changed.Event:Connect(function()
 		if isOpen then

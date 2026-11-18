@@ -121,19 +121,20 @@ local function ApplyMutationSkin(model, mutation)
 end
 
 -- Builds the full fish model. mutation: "None" | "Golden" | "Rainbow".
--- Naga Nila is built at 2x scale; eels (Sidat/Belut) are longer.
+-- Fish are built at 1.4x so they read clearly inside the bigger tanks
+-- (the old 1x fish looked tiny from a few steps away); Naga Nila is 1.6x.
 function FishModelFactory.BuildFishModel(fishId, mutation)
 	local def = FishDefinitions.Fish[fishId]
 	if not def then
 		return nil
 	end
-	local scale = 1
+	local scale = 1.4
 	if fishId == "NagaNila" then
-		scale = 2
+		scale = 1.6
 	end
 	local length = 2.2
 	if fishId == "SidatSultan" or fishId == "BelutBarista" then
-		length = 3.4
+		length = 3.0
 	end
 
 	local model = Instance.new("Model")

@@ -26,15 +26,36 @@ local function GetTankCenter(player, tankIndex)
 	end
 	local plotCenter = GameConfig.BasePlots[data.PlotIndex] or GameConfig.BasePlots[1]
 	local anchor = GameConfig.TankAnchors[tankIndex] or Vector3.new(0, 0, 0)
-	return plotCenter + anchor + Vector3.new(0, 1.6, 0)
+	return plotCenter + anchor + Vector3.new(0, 1.9, 0)
 end
 
-local function BuildTankLabel(glass, fishId, mutation, income, locked)
+-- Keeps the plot's owner sign showing the live tank count ("Tanks: 2/3").
+-- The sign was only set on join, so it read 0/3 forever after the first catch.
+local function UpdatePlotSign(player)
+	local data = DataService.GetData(player)
+	if not data then
+		return
+	end
+	local world = game:GetService("Workspace"):FindFirstChild("BrainrotFishingWorld")
+	local plot = world and world:FindFirstChild("BasePlot" .. data.PlotIndex)
+	local sign = plot and plot:FindFirstChild("OwnerSign")
+	local gui = sign and sign:FindFirstChild("SignLabel")
+	local sub = gui and gui:FindFirstChild("Subtitle")
+	if sub then
+		sub.Text = "Tanks: " .. #data.Tanks .. "/" .. data.TankSlots
+	end
+end
+
+local function BuildTankLabel(glass, fishId, mutation, income, locked, tankIndex)
 	local def = FishDefinitions.Fish[fishId]
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "TankLabel"
-	gui.Size = UDim2.fromOffset(200, 96)
-	gui.StudsOffset = Vector3.new(0, 2.2, 0)
+	gui.Size = UDim2.fromOffset(180, 84)
+	-- Alternate label heights so neighbouring tanks never collide, and only
+	-- show labels up close (the old 200px labels overlapped from a few
+	-- studs away and cluttered the whole base row).
+	gui.StudsOffset = Vector3.new(0, (tankIndex % 2 == 0) and 2.6 or 4, 0)
+	gui.MaxDistance = 60
 	gui.AlwaysOnTop = true
 	gui.Parent = glass
 
@@ -44,7 +65,7 @@ local function BuildTankLabel(glass, fishId, mutation, income, locked)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = def.Name
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.TextSize = 22
+	nameLabel.TextSize = 20
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextStrokeTransparency = 0.3
 	nameLabel.Parent = gui
@@ -65,7 +86,7 @@ local function BuildTankLabel(glass, fishId, mutation, income, locked)
 	end
 	rarityLabel.Text = rarityText
 	rarityLabel.TextColor3 = FishDefinitions.RarityColors[def.Rarity]
-	rarityLabel.TextSize = 18
+	rarityLabel.TextSize = 16
 	rarityLabel.Font = Enum.Font.GothamBold
 	rarityLabel.TextStrokeTransparency = 0.3
 	rarityLabel.Parent = gui
@@ -77,7 +98,7 @@ local function BuildTankLabel(glass, fishId, mutation, income, locked)
 	incomeLabel.BackgroundTransparency = 1
 	incomeLabel.Text = "$" .. income .. "/s"
 	incomeLabel.TextColor3 = Color3.fromRGB(120, 255, 140)
-	incomeLabel.TextSize = 20
+	incomeLabel.TextSize = 18
 	incomeLabel.Font = Enum.Font.GothamBold
 	incomeLabel.TextStrokeTransparency = 0.3
 	incomeLabel.Parent = gui
@@ -102,10 +123,12 @@ local function CreateTankVisual(player, tankIndex, tank)
 	folder.Name = "Tank" .. tankIndex
 	folder.Parent = game:GetService("Workspace"):FindFirstChild("BrainrotFishingWorld")
 
+	-- Bigger tanks (4.2 x 3.8 x 4.2) for the bigger 1.4x fish: the old
+	-- 2.8-stud tanks made every fish look tiny from a few steps away.
 	local glass = Instance.new("Part")
 	glass.Name = "TankGlass"
-	glass.Size = Vector3.new(2.8, 2, 2)
-	glass.Position = center
+	glass.Size = Vector3.new(4.2, 3.8, 4.2)
+	glass.Position = center + Vector3.new(0, 0.3, 0)
 	glass.Color = Color3.fromRGB(200, 230, 255)
 	glass.Material = Enum.Material.Glass
 	glass.Transparency = 0.6
@@ -115,8 +138,8 @@ local function CreateTankVisual(player, tankIndex, tank)
 
 	local water = Instance.new("Part")
 	water.Name = "TankWater"
-	water.Size = Vector3.new(2.5, 1.5, 1.7)
-	water.Position = center + Vector3.new(0, -0.15, 0)
+	water.Size = Vector3.new(3.9, 3.2, 3.9)
+	water.Position = center + Vector3.new(0, 0.1, 0)
 	water.Color = Color3.fromRGB(60, 170, 220)
 	water.Material = Enum.Material.SmoothPlastic
 	water.Transparency = 0.35
@@ -129,14 +152,23 @@ local function CreateTankVisual(player, tankIndex, tank)
 		fishModel.Parent = folder
 		fishModel:PivotTo(CFrame.new(center))
 	end
+	-- Swim radius from the fish's body length, so long fish (eels, Naga)
+	-- stay inside the glass instead of poking through it.
+	local swimRadius = 0.45
+	if fishModel then
+		local body = fishModel:FindFirstChild("Body")
+		if body then
+			swimRadius = math.clamp(2 - math.max(body.Size.X, body.Size.Z) / 2, 0.12, 0.55)
+		end
+	end
 
-	local label = BuildTankLabel(glass, tank.FishId, tank.Mutation, income, locked)
+	local label = BuildTankLabel(glass, tank.FishId, tank.Mutation, income, locked, tankIndex)
 
 	-- Gold padlock block on top of the tank, visible while the base is locked.
 	local lockPart = Instance.new("Part")
 	lockPart.Name = "LockIndicator"
 	lockPart.Size = Vector3.new(0.7, 0.7, 0.25)
-	lockPart.Position = center + Vector3.new(0, 1.5, 0)
+	lockPart.Position = center + Vector3.new(0, 2.5, 0)
 	lockPart.Color = Color3.fromRGB(255, 210, 60)
 	lockPart.Material = Enum.Material.Neon
 	lockPart.Anchored = true
@@ -165,7 +197,7 @@ local function CreateTankVisual(player, tankIndex, tank)
 		LockPart = lockPart,
 		Center = center,
 		Angle = math.random() * math.pi * 2,
-		Radius = 0.55,
+		Radius = swimRadius,
 		Speed = 0.5 + math.random() * 0.4,
 		BobPhase = math.random() * math.pi * 2,
 		Mutation = tank.Mutation,
@@ -186,6 +218,7 @@ function TankService.RebuildPlayerTanks(player)
 		visuals[i] = CreateTankVisual(player, i, tank)
 	end
 	tankVisuals[player] = visuals
+	UpdatePlotSign(player)
 end
 
 -- Destroys all tank visuals for a player (used on leave and before a rebuild).
@@ -237,6 +270,7 @@ function TankService.AddFishToTank(player, fishId, mutation)
 	local visuals = tankVisuals[player] or {}
 	visuals[#data.Tanks] = CreateTankVisual(player, #data.Tanks, data.Tanks[#data.Tanks])
 	tankVisuals[player] = visuals
+	UpdatePlotSign(player)
 	return "added", 0
 end
 

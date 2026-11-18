@@ -150,14 +150,18 @@ GameConfig.DailyRewards = { 100, 200, 350, 500, 750, 1000, 1500 }
 -- ---------------------------------------------------------------------------
 GameConfig.BasePlots = {}
 for i = 1, 10 do
-	GameConfig.BasePlots[i] = Vector3.new(-99 + (i - 1) * 22, 0, 48)
+	GameConfig.BasePlots[i] = Vector3.new(-135 + (i - 1) * 30, 0, 48)
 end
 
 -- Tank anchors inside a plot: 2 rows of 6, local to the plot center.
+-- Column-major order (down each column first) so the first tanks fill as a
+-- grid, not a single row: with 4 tanks the base already looks 2x2. The old
+-- row-major order filled row 1 first, so a base with 6 or fewer tanks
+-- looked like one row.
 GameConfig.TankAnchors = {}
-for row = 1, 2 do
-	for col = 1, 6 do
-		table.insert(GameConfig.TankAnchors, Vector3.new(-7.5 + (col - 1) * 3, 0, -2.5 + (row - 1) * 5))
+for col = 1, 6 do
+	for row = 1, 2 do
+		table.insert(GameConfig.TankAnchors, Vector3.new(-11 + (col - 1) * 4.4, 0, -3.5 + (row - 1) * 7))
 	end
 end
 

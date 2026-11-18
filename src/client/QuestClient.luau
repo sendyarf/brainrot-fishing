@@ -44,7 +44,8 @@ local function RefreshQuests()
 		corner.CornerRadius = UDim.new(0, 8)
 		corner.Parent = row
 		UIHelpers.NewLabel(row, "Name", configQuest.Name, UDim2.new(0.6, 0, 0, 26), UDim2.new(0, 12, 0, 8), 18, UIHelpers.TextWhite)
-		UIHelpers.NewLabel(row, "Reward", "Reward: " .. UIHelpers.FormatMoney(configQuest.Reward), UDim2.new(0.4, 0, 0, 22), UDim2.new(0.6, -12, 0, 10), 15, UIHelpers.AccentGold).TextXAlignment = Enum.TextXAlignment.Right
+		-- The reward lives ON the button (it used to be a separate label
+		-- that overlapped the button and got clipped by it).
 		-- Progress bar.
 		local barBack = Instance.new("Frame")
 		barBack.Size = UDim2.new(1, -150, 0, 18)
@@ -66,15 +67,16 @@ local function RefreshQuests()
 		fillCorner.Parent = fill
 		UIHelpers.NewLabel(row, "Progress", math.min(quest.Progress, configQuest.Target) .. " / " .. configQuest.Target, UDim2.new(1, -150, 0, 18), UDim2.new(0, 12, 0, 44), 13, UIHelpers.TextWhite).TextXAlignment = Enum.TextXAlignment.Center
 		local button
+		local rewardText = UIHelpers.FormatMoney(configQuest.Reward)
 		if quest.Claimed then
 			button = UIHelpers.NewButton(row, "Claim", "DONE", UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(40, 160, 80), 16, Vector2.new(1, 0.5))
 		elseif quest.Progress >= configQuest.Target then
-			button = UIHelpers.NewButton(row, "Claim", "CLAIM", UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(220, 160, 20), 16, Vector2.new(1, 0.5))
+			button = UIHelpers.NewButton(row, "Claim", "CLAIM " .. rewardText, UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(220, 160, 20), 15, Vector2.new(1, 0.5))
 			button.MouseButton1Click:Connect(function()
 				GetRemote("ClaimQuest"):FireServer(configQuest.Id)
 			end)
 		else
-			button = UIHelpers.NewButton(row, "Claim", "LOCKED", UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(90, 90, 100), 16, Vector2.new(1, 0.5))
+			button = UIHelpers.NewButton(row, "Claim", rewardText, UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(90, 90, 100), 16, Vector2.new(1, 0.5))
 		end
 	end
 end
@@ -91,7 +93,7 @@ end
 
 function QuestClient.Init()
 	local gui = player:WaitForChild("PlayerGui"):WaitForChild("BrainrotFishingGui")
-	panel = UIHelpers.NewPanel(gui, "QuestPanel", UDim2.fromOffset(560, 380), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
+	panel = UIHelpers.NewPanel(gui, "QuestPanel", UIHelpers.FitPanelSize(560, 380), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
 	panel.Visible = false
 	UIHelpers.NewLabel(panel, "Title", "DAILY QUESTS", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 8), 24, UIHelpers.AccentGold).TextXAlignment = Enum.TextXAlignment.Center
 	local closeButton = UIHelpers.NewButton(panel, "Close", "X", UDim2.fromOffset(36, 36), UDim2.new(1, -10, 0, 8), Color3.fromRGB(200, 60, 60), 18, Vector2.new(1, 0))
@@ -99,11 +101,15 @@ function QuestClient.Init()
 		QuestClient.Toggle()
 	end)
 	UIHelpers.NewLabel(panel, "Note", "Quests reset every session. Finish them for bonus cash!", UDim2.new(1, -20, 0, 22), UDim2.new(0, 10, 0, 46), 14, UIHelpers.TextDim).TextXAlignment = Enum.TextXAlignment.Center
-	listFrame = Instance.new("Frame")
+	-- The list scrolls so the third quest is never cut off on a short viewport.
+	listFrame = Instance.new("ScrollingFrame")
 	listFrame.Name = "QuestList"
 	listFrame.Size = UDim2.new(1, -16, 1, -80)
 	listFrame.Position = UDim2.new(0, 8, 0, 72)
 	listFrame.BackgroundTransparency = 1
+	listFrame.BorderSizePixel = 0
+	listFrame.ScrollBarThickness = 6
+	listFrame.CanvasSize = UDim2.new(0, 0, 0, 284)
 	listFrame.Parent = panel
 	ClientState.Changed.Event:Connect(function()
 		if isOpen then
