@@ -1,4 +1,4 @@
-// Brainrot Fishing — "Brainrot Fishing: 12 Voxel Brainrots, House Bases, Steal & Rebirth".
+// Brainrot Fishing — "Brainrot Fishing: 12 Voxel Brainrots — Fish, Steal, Lock, Rebirth".
 // A 3D sunset-lake fishing game: cast from the pier, win the reel minigame, fill your
 // glass aquarium, steal from rivals, lock your base, survive the Naga Nila lake monster,
 // and rebirth for permanent income multipliers. Built Rojo-first from src/ (see the
