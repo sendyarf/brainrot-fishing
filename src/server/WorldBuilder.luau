@@ -7,6 +7,7 @@ local GameConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("Sh
 local WorldBuilder = {}
 
 local monsterParts = {}
+local lakeParts = {}
 
 -- Creates one anchored part with the given properties.
 local function MakePart(parent, name, className, size, position, color, material)
@@ -83,12 +84,14 @@ end
 -- rendered through everything and looked detached from the board. A
 -- SurfaceGui lives on the face itself: it is occluded like the board,
 -- readable only from the front, and never floats. `face` is the board
--- face the text goes on (Front = +Z by default; the base sign faces the
--- lake, so it uses Back).
+-- face the text goes on. ROBLOX GOTCHA (fix 12): Front is -Z (the
+-- LookVector direction), Back is +Z — the opposite of the naive reading.
+-- Spot signs face +Z (Back) because players approach them from the south;
+-- the base sign faces -Z (Front) because the lake is north of the plots.
 local function AttachSignLabel(board, title, subtitle, titleColor, face)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "SignLabel"
-	gui.Face = face or Enum.NormalId.Front
+	gui.Face = face or Enum.NormalId.Back
 	gui.PixelsPerStud = 50
 	gui.AlwaysOnTop = false
 	gui.Parent = board
@@ -302,12 +305,13 @@ local function BuildBasePlot(world, index, center)
 	local roofBack = MakePart(plot, "RoofBack", "Part", Vector3.new(33, 0.3, 13), center + Vector3.new(0, 9.58, 6), accent)
 	roofBack.CFrame = CFrame.new(center + Vector3.new(0, 9.58, 6)) * CFrame.Angles(math.rad(15), 0, 0)
 	MakePart(plot, "RoofRidge", "Part", Vector3.new(33, 0.5, 0.5), center + Vector3.new(0, 11.3, 0), accent)
-	-- Owner sign hanging on the header, facing the lake (Back face = -Z).
-	-- Its bottom (5.65) clears a 5-stud player walking in; the name is
-	-- filled in when a player claims the plot.
+	-- Owner sign hanging on the header, facing the lake (Front = -Z, the
+	-- lake side; Back would face into the base — fix 12, the old code
+	-- had it backwards). Its bottom (5.65) clears a 5-stud player
+	-- walking in; the name is filled in when a player claims the plot.
 	local signBoard = MakePart(plot, "OwnerSign", "Part", Vector3.new(10, 2.5, 0.3), center + Vector3.new(0, 6.9, -12.6), Color3.fromRGB(70, 45, 25), Enum.Material.WoodPlanks)
 	signBoard.CanCollide = false
-	AttachSignLabel(signBoard, "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170), Enum.NormalId.Back)
+	AttachSignLabel(signBoard, "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170), Enum.NormalId.Front)
 	-- Display tables (12): a pedestal + an accent top. The tank glass
 	-- sits on the top (y 1.8) — see TankService.GetTankCenter (+3.75).
 	for i, offset in ipairs(GameConfig.TankAnchors) do
@@ -317,14 +321,18 @@ local function BuildBasePlot(world, index, center)
 	return plot
 end
 
--- The lake monster's hidden parts: a dark shadow on the deep water, a fin
--- and two glowing eyes that rise during the event. They live MID-LAKE
--- (x = 18, z = -45), east of the pier, ~60 studs from the shore — the old
--- spot at z = -80 was 100+ studs from every player, so the 4-stud fin and
--- 1.4-stud eyes were invisible and the event looked like nothing happened
--- (the blessing after it proved it HAD run). Big fin, big eyes, a red glow
--- light, and the shadow sitting ON the water surface (y = 0.5, above the
--- lake top at 0.3) so the monster is unmissable when it stirs.
+-- The lake monster's hidden parts: a dark shadow on the deep water, a
+-- voxel dorsal fin and a voxel serpent head that rise during the event.
+-- They live MID-LAKE (x = 18, z = -45), east of the pier, ~60 studs from
+-- the shore — the old spot at z = -80 was 100+ studs from every player,
+-- so the 4-stud fin and 1.4-stud eyes were invisible and the event looked
+-- like nothing happened (the blessing after it proved it HAD run). Big
+-- fin, big head, a red glow light, and the shadow sitting ON the water
+-- surface (y = 0.5, above the lake top at 0.3) so the monster is
+-- unmissable when it stirs. Fix 12: the plain wedge fin + floating ball
+-- eyes are gone — the fin is a stepped voxel fin and the head is a voxel
+-- serpent head (neck, snout, jaw, teeth, glowing eyes) facing the shore,
+-- matching the voxel fish detail.
 local function BuildMonster(world)
 	local folder = Instance.new("Folder")
 	folder.Name = "LakeMonster"
@@ -333,17 +341,48 @@ local function BuildMonster(world)
 	shadow.Shape = Enum.PartType.Ball
 	shadow.Transparency = 1
 	shadow.CanCollide = false
-	local fin = MakePart(folder, "MonsterFin", "WedgePart", Vector3.new(8, 12, 1.5), Vector3.new(18, 3, -45), Color3.fromRGB(60, 255, 130), Enum.Material.Neon)
-	fin.Transparency = 1
-	fin.CanCollide = false
-	local eyeLeft = MakePart(folder, "MonsterEyeLeft", "Part", Vector3.new(3.5, 3.5, 3.5), Vector3.new(15, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
-	eyeLeft.Shape = Enum.PartType.Ball
-	eyeLeft.Transparency = 1
-	eyeLeft.CanCollide = false
-	local eyeRight = MakePart(folder, "MonsterEyeRight", "Part", Vector3.new(3.5, 3.5, 3.5), Vector3.new(21, 1.8, -40), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
-	eyeRight.Shape = Enum.PartType.Ball
-	eyeRight.Transparency = 1
-	eyeRight.CanCollide = false
+	-- Voxel dorsal fin: five stepped Neon columns (heights 4/8/12/8/4),
+	-- rooted below the water surface so they rise out of it.
+	local finModel = Instance.new("Model")
+	finModel.Name = "MonsterFin"
+	finModel.Parent = folder
+	local finGreen = Color3.fromRGB(60, 255, 130)
+	local finHeights = { 4, 8, 12, 8, 4 }
+	for i, h in ipairs(finHeights) do
+		local col = MakePart(finModel, "FinColumn" .. i, "Part", Vector3.new(1.8, h, 1.5), Vector3.new(14.4 + (i - 1) * 1.8, h / 2 - 1, -45), finGreen, Enum.Material.Neon)
+		col.Transparency = 1
+		col.CanCollide = false
+	end
+	-- Voxel serpent head at (18, -40), facing the shore (+Z, where the
+	-- players are). Every part overlaps its neighbour (the fix-9 join
+	-- rule) so nothing floats or z-fights.
+	local headModel = Instance.new("Model")
+	headModel.Name = "MonsterHead"
+	headModel.Parent = folder
+	local headGreen = Color3.fromRGB(20, 80, 60)
+	local snoutGreen = Color3.fromRGB(30, 100, 75)
+	local darkGreen = Color3.fromRGB(10, 30, 25)
+	local function HeadPart(name, size, pos, color, material)
+		local part = MakePart(headModel, name, "Part", size, pos, color, material)
+		part.Transparency = 1
+		part.CanCollide = false
+		return part
+	end
+	HeadPart("Neck", Vector3.new(3, 5, 3), Vector3.new(18, 2, -40), headGreen)
+	HeadPart("Head", Vector3.new(5, 3, 5), Vector3.new(18, 5.5, -40), headGreen)
+	HeadPart("Snout", Vector3.new(3, 2, 3), Vector3.new(18, 5.5, -36.5), snoutGreen)
+	HeadPart("Jaw", Vector3.new(3, 1, 2.5), Vector3.new(18, 3.7, -36.5), headGreen)
+	for i, x in ipairs({ 17, 17.7, 18.3, 19 }) do
+		HeadPart("Tooth" .. i, Vector3.new(0.4, 0.7, 0.4), Vector3.new(x, 4.3, -35.3), Color3.fromRGB(240, 240, 230))
+	end
+	for i, x in ipairs({ 16.3, 19.7 }) do
+		HeadPart("EyeSocket" .. i, Vector3.new(1.4, 1.4, 0.3), Vector3.new(x, 6.5, -37.6), darkGreen)
+		HeadPart("Eye" .. i, Vector3.new(1, 1, 0.4), Vector3.new(x, 6.5, -37.4), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
+		HeadPart("Brow" .. i, Vector3.new(1.4, 0.4, 0.3), Vector3.new(x, 7.1, -37.6), darkGreen)
+	end
+	for i, z in ipairs({ -41.5, -40, -38.5 }) do
+		HeadPart("HeadSpike" .. i, Vector3.new(0.6, 0.8, 0.6), Vector3.new(18, 7.3, z), darkGreen)
+	end
 	-- A red glow disc on the water under the monster: the dark fin on dark
 	-- night water was still invisible in playtests, so the event now has a
 	-- glowing red halo on the surface plus a Neon green fin.
@@ -359,8 +398,8 @@ local function BuildMonster(world)
 	glow.Brightness = 5
 	glow.Range = 60
 	glow.Enabled = false
-	glow.Parent = fin
-	monsterParts = { Shadow = shadow, Fin = fin, EyeLeft = eyeLeft, EyeRight = eyeRight, Glow = glow, GlowDisc = glowDisc }
+	glow.Parent = headModel:FindFirstChild("Head")
+	monsterParts = { Shadow = shadow, Fin = finModel, Head = headModel, Glow = glow, GlowDisc = glowDisc }
 end
 
 -- A small wooden rowboat floating near the pier.
@@ -398,6 +437,8 @@ function WorldBuilder.BuildWorld()
 	local lake = MakePart(world, "LakeWater", "Part", Vector3.new(200, 3.8, 140), Vector3.new(0, -1.65, -60), Color3.fromRGB(35, 140, 180), Enum.Material.SmoothPlastic)
 	lake.Transparency = 0.18
 	lake.CanCollide = false
+	lakeParts.Lake = lake
+	lakeParts.Patches = {}
 	-- Sandy shore strip where the lake meets the land.
 	MakePart(world, "ShoreSand", "Part", Vector3.new(200, 0.5, 22), Vector3.new(0, 0.1, 21), Color3.fromRGB(235, 215, 160), Enum.Material.Sand)
 	-- Glowing water patches mark each fishing spot's depth — Neon so they
@@ -412,6 +453,7 @@ function WorldBuilder.BuildWorld()
 		patch.CFrame = CFrame.new(Vector3.new(spot.Position.X, 0.4, spot.Position.Z)) * CFrame.Angles(0, 0, math.rad(90))
 		patch.Transparency = 0.15
 		patch.CanCollide = false
+		lakeParts.Patches[spotId] = patch
 		local patchLight = Instance.new("PointLight")
 		patchLight.Color = spot.WaterColor
 		patchLight.Brightness = 1.5
@@ -517,6 +559,12 @@ end
 -- Returns the monster's parts so MonsterEventService can show/hide them.
 function WorldBuilder.GetMonsterParts()
 	return monsterParts
+end
+
+-- The lake surface + the spot water patches, for the wave's blood-red
+-- water (MonsterEventService recolors them and restores them).
+function WorldBuilder.GetLakeParts()
+	return lakeParts
 end
 
 return WorldBuilder

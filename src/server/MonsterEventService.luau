@@ -56,16 +56,31 @@ function MonsterEventService.RaidUnlockedTanks()
 	end
 end
 
--- Shows or hides the monster's shadow, fin and glowing eyes.
+-- Shows or hides the monster's shadow, fin and head. Fin/Head are Models
+-- (fix 12 voxel parts), so every descendant part is toggled.
+local function SetContainerTransparency(container, value)
+	if not container then
+		return
+	end
+	if container:IsA("BasePart") then
+		container.Transparency = value
+	else
+		for _, part in ipairs(container:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = value
+			end
+		end
+	end
+end
+
 local function SetMonsterVisible(shadowOnly, fullyVisible)
 	local parts = WorldBuilder.GetMonsterParts()
 	if not parts.Shadow then
 		return
 	end
 	parts.Shadow.Transparency = (shadowOnly or fullyVisible) and 0.35 or 1
-	parts.Fin.Transparency = fullyVisible and 0 or 1
-	parts.EyeLeft.Transparency = fullyVisible and 0 or 1
-	parts.EyeRight.Transparency = fullyVisible and 0 or 1
+	SetContainerTransparency(parts.Fin, fullyVisible and 0 or 1)
+	SetContainerTransparency(parts.Head, fullyVisible and 0 or 1)
 	if parts.GlowDisc then
 		parts.GlowDisc.Transparency = (shadowOnly or fullyVisible) and 0.55 or 1
 	end
@@ -109,6 +124,32 @@ local SKY = {
 	},
 }
 
+-- Blood-red water during the wave (fix 12): the lake surface + the spot
+-- water patches turn dark blood red while the monster stirs, then return
+-- to their normal colors when the sky calms. The beams keep their colors
+-- (they mark the spots, they are not lake water).
+local BLOOD_RED = Color3.fromRGB(140, 15, 20)
+local LAKE_BLUE = Color3.fromRGB(35, 140, 180)
+
+local function SetWater(red)
+	local parts = WorldBuilder.GetLakeParts()
+	if not parts.Lake then
+		return
+	end
+	parts.Lake.Color = red and BLOOD_RED or LAKE_BLUE
+	if parts.Patches then
+		for spotId, patch in pairs(parts.Patches) do
+			local spot = GameConfig.Spots[spotId]
+			local normal = spot and spot.WaterColor or LAKE_BLUE
+			patch.Color = red and BLOOD_RED or normal
+			local light = patch:FindFirstChildOfClass("PointLight")
+			if light then
+				light.Color = red and Color3.fromRGB(255, 60, 60) or normal
+			end
+		end
+	end
+end
+
 local function SetSky(mode)
 	local s = SKY[mode] or SKY.Normal
 	local lighting = game:GetService("Lighting")
@@ -122,6 +163,7 @@ local function SetSky(mode)
 		atmosphere.Color = s.AtmosphereColor
 		atmosphere.Decay = s.AtmosphereDecay
 	end
+	SetWater(mode == "Wave")
 end
 
 -- Runs one full event cycle: warning -> active -> calm + blessing.

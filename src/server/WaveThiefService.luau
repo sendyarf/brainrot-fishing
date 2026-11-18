@@ -61,10 +61,14 @@ local function MakePart(model, name, size, offset, color, material)
 	return part
 end
 
--- A cloaked shadow figure: stacked robe, head with glowing red eyes, a
--- pointed hood, a red light so it reads at night, and a tall red beacon
+-- A cloaked shadow figure: stepped voxel robe, a voxel head with a dark
+-- face plate + glowing red cube eyes, a pointed voxel hood (stacked
+-- shrinking boxes, not a ball), a sash, and a sack on its back for the
+-- stolen fish. A red light so it reads at night, and a tall red beacon
 -- beam so the player can spot it from across the lake (the thief walks in
--- behind a fishing player, who would otherwise never see it).
+-- behind a fishing player, who would otherwise never see it). Fix 12:
+-- voxel detail to match the fish + the monster (the old ball head/hood
+-- looked plain next to them).
 local function BuildThiefModel()
 	local model = Instance.new("Model")
 	model.Name = "ShadowThief"
@@ -72,14 +76,24 @@ local function BuildThiefModel()
 	local bottom = MakePart(model, "RobeBottom", Vector3.new(2.2, 1.2, 2.2), Vector3.new(0, 0.6, 0), robeColor)
 	MakePart(model, "RobeMid", Vector3.new(1.7, 1.2, 1.7), Vector3.new(0, 1.8, 0), robeColor)
 	MakePart(model, "RobeTop", Vector3.new(1.2, 1, 1.2), Vector3.new(0, 2.9, 0), robeColor)
-	local head = MakePart(model, "Head", Vector3.new(1.1, 1.1, 1.1), Vector3.new(0, 4, 0), Color3.fromRGB(50, 35, 70))
-	head.Shape = Enum.PartType.Ball
-	local hood = MakePart(model, "Hood", Vector3.new(0.8, 1.2, 0.8), Vector3.new(0, 4.9, 0), robeColor)
-	hood.Shape = Enum.PartType.Ball
+	-- Voxel robe folds: small cubes on the robe sides so the silhouette
+	-- reads as cloth, not a plain stack.
+	MakePart(model, "RobeFoldL", Vector3.new(0.3, 1.6, 0.3), Vector3.new(-1, 1.6, 0.6), Color3.fromRGB(35, 22, 52))
+	MakePart(model, "RobeFoldR", Vector3.new(0.3, 1.6, 0.3), Vector3.new(1, 1.6, 0.6), Color3.fromRGB(35, 22, 52))
+	-- Sash around the robe waist + a sack on the back for stolen fish.
+	MakePart(model, "Sash", Vector3.new(1.8, 0.3, 1.8), Vector3.new(0, 2.35, 0), Color3.fromRGB(180, 40, 50))
+	MakePart(model, "Sack", Vector3.new(0.9, 1, 0.6), Vector3.new(0, 2.6, -0.9), Color3.fromRGB(150, 110, 60))
+	MakePart(model, "SackTie", Vector3.new(0.5, 0.3, 0.4), Vector3.new(0, 3.2, -0.9), Color3.fromRGB(120, 85, 45))
+	MakePart(model, "Head", Vector3.new(1.1, 1.1, 1.1), Vector3.new(0, 4, 0), Color3.fromRGB(50, 35, 70))
+	-- Dark face plate on the front (+Z) + glowing red cube eyes on it.
+	MakePart(model, "FacePlate", Vector3.new(0.9, 0.9, 0.2), Vector3.new(0, 4, 0.5), Color3.fromRGB(20, 12, 30))
 	for _, side in ipairs({ -1, 1 }) do
-		local eye = MakePart(model, "Eye" .. (side < 0 and "L" or "R"), Vector3.new(0.28, 0.28, 0.28), Vector3.new(side * 0.25, 4.1, 0.5), Color3.fromRGB(255, 50, 50), Enum.Material.Neon)
-		eye.Shape = Enum.PartType.Ball
+		MakePart(model, "Eye" .. (side < 0 and "L" or "R"), Vector3.new(0.28, 0.28, 0.2), Vector3.new(side * 0.25, 4.1, 0.62), Color3.fromRGB(255, 50, 50), Enum.Material.Neon)
 	end
+	-- Pointed voxel hood: three stacked shrinking boxes over the head.
+	MakePart(model, "HoodBase", Vector3.new(1.2, 0.5, 1.2), Vector3.new(0, 4.7, 0), robeColor)
+	MakePart(model, "HoodMid", Vector3.new(0.8, 0.5, 0.8), Vector3.new(0, 5.1, 0), robeColor)
+	MakePart(model, "HoodTip", Vector3.new(0.4, 0.6, 0.4), Vector3.new(0, 5.6, 0), robeColor)
 	local beacon = MakePart(model, "Beacon", Vector3.new(0.5, 20, 0.5), Vector3.new(0, 12, 0), Color3.fromRGB(255, 60, 60), Enum.Material.Neon)
 	beacon.Transparency = 0.5
 	local light = Instance.new("PointLight")

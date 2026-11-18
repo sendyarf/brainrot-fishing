@@ -17,6 +17,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
+local RodModelFactory = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RodModelFactory"))
 local DataService = require(script.Parent:WaitForChild("DataService"))
 
 local RodToolService = {}
@@ -29,63 +30,36 @@ local function GetRemote(name)
 	return ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild(name)
 end
 
--- Colors per rod tier (shaft, grip, reel, shaft material).
-local RodColors = {
-	Bamboo = { Shaft = Color3.fromRGB(170, 130, 80), Grip = Color3.fromRGB(120, 85, 50), Reel = Color3.fromRGB(90, 90, 90), Material = Enum.Material.Wood },
-	Wooden = { Shaft = Color3.fromRGB(140, 95, 55), Grip = Color3.fromRGB(100, 70, 40), Reel = Color3.fromRGB(90, 90, 90), Material = Enum.Material.Wood },
-	Steel = { Shaft = Color3.fromRGB(150, 155, 165), Grip = Color3.fromRGB(60, 60, 70), Reel = Color3.fromRGB(200, 200, 210), Material = Enum.Material.Metal },
-	Golden = { Shaft = Color3.fromRGB(255, 210, 60), Grip = Color3.fromRGB(180, 140, 40), Reel = Color3.fromRGB(255, 220, 100), Material = Enum.Material.Metal },
-	Dragon = { Shaft = Color3.fromRGB(180, 40, 50), Grip = Color3.fromRGB(80, 20, 30), Reel = Color3.fromRGB(255, 170, 60), Material = Enum.Material.SmoothPlastic },
-}
-
-local function MakeRodPart(tool, handle, name, size, cframe, color, material, shape)
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Size = size
-	part.CFrame = cframe
-	part.Color = color
-	part.Material = material
-	part.Anchored = false
-	part.CanCollide = false
-	part.CanQuery = false
-	part.Massless = true
-	if shape then
-		part.Shape = shape
-	end
-	part.Parent = tool
-	if part ~= handle then
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = handle
-		weld.Part1 = part
-		weld.Parent = handle
-	end
-	return part
-end
-
--- Builds the rod Tool for a rod id (not parented). Parts are placed
--- relative to the Handle at the origin, then welded to it, so the whole
+-- Builds the rod Tool for a rod id (not parented). The parts come from
+-- the shared RodModelFactory (the same model the shop previews), then
+-- move into the Tool, unanchored and welded to the Handle, so the whole
 -- rod follows the hand when equipped.
 function RodToolService.BuildRodTool(rodId)
 	local def = GameConfig.Rods[rodId] or GameConfig.Rods.Bamboo
-	local colors = RodColors[rodId] or RodColors.Bamboo
+	local model = RodModelFactory.BuildRodModel(rodId)
 	local tool = Instance.new("Tool")
 	tool.Name = def.Name
 	tool:SetAttribute("RodTool", true)
 	tool.CanBeDropped = false
 	tool.ManualActivationOnly = true -- casting is E, not a tool click
 	tool.RequiresHandle = true
-
-	-- Grip the hand holds (the Tool's Handle), 1.4 tall.
-	local handle = MakeRodPart(tool, nil, "Handle", Vector3.new(0.35, 1.4, 0.35), CFrame.new(0, 0, 0), colors.Grip, Enum.Material.Wood)
-	-- Shaft: 5-stud cylinder along +Y from the top of the grip.
-	local shaftCFrame = CFrame.new(0, 3.2, 0) * CFrame.Angles(0, 0, math.rad(90))
-	MakeRodPart(tool, handle, "Shaft", Vector3.new(5, 0.18, 0.18), shaftCFrame, colors.Shaft, colors.Material, Enum.PartType.Cylinder)
-	-- Tip: thin lighter section at the top.
-	local tipCFrame = CFrame.new(0, 6.0, 0) * CFrame.Angles(0, 0, math.rad(90))
-	MakeRodPart(tool, handle, "Tip", Vector3.new(0.8, 0.1, 0.1), tipCFrame, colors.Shaft, colors.Material, Enum.PartType.Cylinder)
-	-- Reel body on the front of the grip + a small crank knob.
-	MakeRodPart(tool, handle, "Reel", Vector3.new(0.5, 0.5, 0.35), CFrame.new(0, 0.45, 0.32), colors.Reel, Enum.Material.Metal)
-	MakeRodPart(tool, handle, "ReelKnob", Vector3.new(0.35, 0.14, 0.14), CFrame.new(0.4, 0.45, 0.32), colors.Reel, Enum.Material.Metal, Enum.PartType.Cylinder)
+	local handle = model:FindFirstChild("Handle")
+	for _, part in ipairs(model:GetChildren()) do
+		if part:IsA("BasePart") then
+			part.Anchored = false
+			part.CanCollide = false
+			part.CanQuery = false
+			part.Massless = true
+			part.Parent = tool
+			if part ~= handle then
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = handle
+				weld.Part1 = part
+				weld.Parent = handle
+			end
+		end
+	end
+	model:Destroy()
 	return tool
 end
 
