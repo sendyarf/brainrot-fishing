@@ -93,7 +93,14 @@ local function MakeSign(parent, position, title, subtitle, titleColor)
 	gui.Size = UDim2.new(7, 0, 3.6, 0)
 	gui.StudsOffset = Vector3.new(0, 0, 0)
 	gui.MaxDistance = 120
-	gui.AlwaysOnTop = false
+	-- AlwaysOnTop: the GUI plane sits at the board's center, INSIDE the
+	-- 0.3-thick board. With AlwaysOnTop off, the board's own front face
+	-- occludes the half of the text that falls behind it at any viewing
+	-- angle — every sign showed only its right half ("...ASE",
+	-- "...anks go here"). Rendering on top is the standard fix for
+	-- billboard signs; the text still sits on the board, it just can't be
+	-- eaten by the board itself.
+	gui.AlwaysOnTop = true
 	gui.Parent = board
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Name = "Title"
@@ -135,10 +142,10 @@ local function BuildPier(world)
 	-- Side rails.
 	MakePart(pier, "RailLeft", "Part", Vector3.new(0.4, 1, 96), Vector3.new(-3, 1.5, -19), Color3.fromRGB(140, 100, 60), Enum.Material.Wood)
 	MakePart(pier, "RailRight", "Part", Vector3.new(0.4, 1, 96), Vector3.new(3, 1.5, -19), Color3.fromRGB(140, 100, 60), Enum.Material.Wood)
-	-- Support posts under the pier.
+	-- Support posts under the pier, down to the lakebed.
 	for z = 24, -64, -16 do
-		MakePart(pier, "PierPost", "Part", Vector3.new(0.8, 3, 0.8), Vector3.new(-2.4, -0.5, z), Color3.fromRGB(100, 70, 40), Enum.Material.Wood)
-		MakePart(pier, "PierPost", "Part", Vector3.new(0.8, 3, 0.8), Vector3.new(2.4, -0.5, z), Color3.fromRGB(100, 70, 40), Enum.Material.Wood)
+		MakePart(pier, "PierPost", "Part", Vector3.new(0.8, 4.5, 0.8), Vector3.new(-2.4, -1.25, z), Color3.fromRGB(100, 70, 40), Enum.Material.Wood)
+		MakePart(pier, "PierPost", "Part", Vector3.new(0.8, 4.5, 0.8), Vector3.new(2.4, -1.25, z), Color3.fromRGB(100, 70, 40), Enum.Material.Wood)
 	end
 	-- Lanterns along the pier.
 	for _, z in ipairs({ 24, 0, -24, -48, -64 }) do
@@ -173,9 +180,11 @@ local function BuildIsland(world, center, kind)
 	local island = Instance.new("Folder")
 	island.Name = kind .. "Island"
 	island.Parent = world
-	local sand = MakePart(island, "IslandSand", "Part", Vector3.new(1.5, 26, 26), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(230, 210, 150), Enum.Material.Sand)
+	-- Island base: a sand cylinder reaching down to the lakebed (-3.5) so
+	-- the island stands IN the lake instead of floating above it.
+	local sand = MakePart(island, "IslandSand", "Part", Vector3.new(4.5, 26, 26), center + Vector3.new(0, -1.3, 0), Color3.fromRGB(230, 210, 150), Enum.Material.Sand)
 	sand.Shape = Enum.PartType.Cylinder
-	sand.CFrame = CFrame.new(center + Vector3.new(0, 0.2, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	sand.CFrame = CFrame.new(center + Vector3.new(0, -1.3, 0)) * CFrame.Angles(0, 0, math.rad(90))
 	if kind == "Abyss" then
 		MakeRock(island, center + Vector3.new(-6, 1, -4), 2.2)
 		MakeRock(island, center + Vector3.new(7, 1, 5), 1.6)
@@ -277,14 +286,23 @@ function WorldBuilder.BuildWorld()
 	world.Name = "BrainrotFishingWorld"
 	world.Parent = workspace
 
-	-- Ground: bright green meadow.
-	MakePart(world, "Ground", "Part", Vector3.new(300, 2, 300), Vector3.new(0, -1, 0), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
-	-- Lake: big translucent teal sheet over the north half.
-	local lake = MakePart(world, "LakeWater", "Part", Vector3.new(200, 1, 140), Vector3.new(0, -0.2, -60), Color3.fromRGB(45, 160, 190), Enum.Material.SmoothPlastic)
-	lake.Transparency = 0.25
+	-- Ground: bright green meadow in four slabs that leave a real basin for
+	-- the lake (x -100..100, z -130..10). The old single slab ran under the
+	-- whole lake, so the "lake" was a 0.3-stud sheet lying on grass.
+	MakePart(world, "GroundSouth", "Part", Vector3.new(300, 2, 140), Vector3.new(0, -1, 80), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
+	MakePart(world, "GroundNorth", "Part", Vector3.new(300, 2, 20), Vector3.new(0, -1, -140), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
+	MakePart(world, "GroundEast", "Part", Vector3.new(50, 2, 140), Vector3.new(125, -1, -60), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
+	MakePart(world, "GroundWest", "Part", Vector3.new(50, 2, 140), Vector3.new(-125, -1, -60), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
+	-- Lakebed at the bottom of the basin (top at y = -3.5).
+	MakePart(world, "LakeBed", "Part", Vector3.new(200, 1, 140), Vector3.new(0, -4, -60), Color3.fromRGB(190, 175, 130), Enum.Material.Sand)
+	-- Lake: deep, dark water, 3.8 studs thick (surface at y = 0.25).
+	-- Players who walk in wade chest-deep on the lakebed and can jump back
+	-- out (the 3.5-stud ledge is well within jump height).
+	local lake = MakePart(world, "LakeWater", "Part", Vector3.new(200, 3.8, 140), Vector3.new(0, -1.65, -60), Color3.fromRGB(35, 140, 180), Enum.Material.SmoothPlastic)
+	lake.Transparency = 0.18
 	lake.CanCollide = false
 	-- Sandy shore strip where the lake meets the land.
-	MakePart(world, "ShoreSand", "Part", Vector3.new(200, 0.5, 22), Vector3.new(0, 0.1, 20), Color3.fromRGB(235, 215, 160), Enum.Material.Sand)
+	MakePart(world, "ShoreSand", "Part", Vector3.new(200, 0.5, 22), Vector3.new(0, 0.1, 21), Color3.fromRGB(235, 215, 160), Enum.Material.Sand)
 	-- Glowing water patches mark each fishing spot's depth — Neon so they
 	-- actually glow, with a light of their own and a tall light beam rising
 	-- from each one. A flat translucent disc was invisible from anywhere
@@ -358,14 +376,14 @@ function WorldBuilder.BuildWorld()
 		MakeTree(world, spec[1], spec[2], spec[3])
 	end
 
-	-- Rocks near the waterline.
+	-- Rocks near the waterline (on the shore, not floating in the lake).
 	for _, spec in ipairs({
 		{ Vector3.new(-18, 0.4, 28), 1.4 },
 		{ Vector3.new(22, 0.4, 30), 1.1 },
 		{ Vector3.new(-95, 0.4, 18), 1.8 },
 		{ Vector3.new(96, 0.4, 20), 1.5 },
-		{ Vector3.new(-40, 0.4, -5), 1.2 },
-		{ Vector3.new(44, 0.4, -8), 1.6 },
+		{ Vector3.new(-40, 0.4, 12), 1.2 },
+		{ Vector3.new(44, 0.4, 14), 1.6 },
 	}) do
 		MakeRock(world, spec[1], spec[2])
 	end

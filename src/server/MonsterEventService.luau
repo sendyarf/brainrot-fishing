@@ -118,13 +118,29 @@ function MonsterEventService.StartMonsterEvent()
 	DataService.BroadcastAll()
 end
 
--- Schedules the next event 4-6 minutes out, then loops forever.
+-- Schedules the next event, then loops forever. The FIRST wave comes after
+-- 90 seconds so a new player actually sees the monster; later waves are
+-- 4-6 minutes apart. The event body runs inside a pcall: one error inside
+-- an event must never kill the scheduler and silence every future wave.
 function MonsterEventService.ScheduleNextEvent()
 	task.spawn(function()
+		local first = true
 		while true do
-			local waitTime = GameConfig.MonsterIntervalMin + math.random() * (GameConfig.MonsterIntervalMax - GameConfig.MonsterIntervalMin)
+			local waitTime
+			if first then
+				waitTime = GameConfig.MonsterFirstDelay
+				first = false
+			else
+				waitTime = GameConfig.MonsterIntervalMin + math.random() * (GameConfig.MonsterIntervalMax - GameConfig.MonsterIntervalMin)
+			end
+			MonsterState.SetNextEventAt(os.clock() + waitTime)
 			task.wait(waitTime)
-			MonsterEventService.StartMonsterEvent()
+			local ok, err = pcall(MonsterEventService.StartMonsterEvent)
+			if not ok then
+				warn("[BrainrotFishing] Monster event failed: " .. tostring(err))
+				MonsterState.SetPhase("Calm")
+				MonsterState.SetActive(false)
+			end
 		end
 	end)
 end

@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
 local FishDefinitions = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishDefinitions"))
+local MonsterState = require(script.Parent:WaitForChild("MonsterState"))
 
 local DataService = {}
 
@@ -266,6 +267,8 @@ function DataService.BroadcastState(player)
 		LockCooldownRemaining = math.max(0, data.LockCooldownUntil - now),
 		BlessingRemaining = math.max(0, data.BlessingUntil - now),
 		TangledRemaining = math.max(0, data.TangledUntil - now),
+		MonsterNextIn = MonsterState.GetSecondsUntilNext(),
+		MonsterPhase = MonsterState.GetPhase(),
 		Quests = quests,
 		Collection = data.Collection,
 		CaughtByTier = data.CaughtByTier,

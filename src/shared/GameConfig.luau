@@ -101,6 +101,7 @@ GameConfig.LockCooldown = 600 -- 10 minutes
 -- ---------------------------------------------------------------------------
 GameConfig.MonsterIntervalMin = 240 -- 4 minutes
 GameConfig.MonsterIntervalMax = 360 -- 6 minutes
+GameConfig.MonsterFirstDelay = 90 -- first wave comes early so new players see it
 GameConfig.MonsterWarningSeconds = 15
 GameConfig.MonsterDuration = 30
 GameConfig.MonsterRaidChance = 0.25

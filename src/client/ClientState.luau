@@ -18,6 +18,8 @@ local state = {
 	LockCooldownRemaining = 0,
 	BlessingRemaining = 0,
 	TangledRemaining = 0,
+	MonsterNextIn = 0,
+	MonsterPhase = "Calm",
 	Quests = {},
 	Collection = {},
 	CaughtByTier = { Common = 0, Rare = 0, Epic = 0, Legendary = 0, Mythic = 0 },

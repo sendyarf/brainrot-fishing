@@ -17,7 +17,7 @@ local STEPS = {
 	"2.  Press E to cast. When a fish bites, press E (or tap REEL) while the needle is in the GREEN zone. 3 points lands the fish!",
 	"3.  Caught fish swim in your tanks and earn $ every second — even while you explore.",
 	"4.  Spend $ in the SHOP: better rods, tastier bait, more tank slots, and new fishing spots.",
-	"5.  Tap LOCK BASE to protect your tanks from thieves. REBIRTH at $25,000 for +50% income forever!",
+	"5.  LOCK BASE protects your tanks from thieves and from Naga Nila's wave. REBIRTH at $25,000 for +50% income forever!",
 }
 
 function HelpClient.Show()

@@ -49,16 +49,21 @@ local function RefreshHUD(state)
 	if blessingLabel then
 		if state.BlessingRemaining > 0 then
 			blessingLabel.Text = "Calm Water Blessing +10% luck (" .. math.ceil(state.BlessingRemaining) .. "s)"
+			blessingLabel.TextColor3 = UIHelpers.AccentGold
 			blessingLabel.Visible = true
 		elseif state.TangledRemaining > 0 then
 			blessingLabel.Text = "Rod tangled! Wait " .. math.ceil(state.TangledRemaining) .. "s"
 			blessingLabel.TextColor3 = UIHelpers.AccentRed
 			blessingLabel.Visible = true
+		elseif state.MonsterPhase == "Calm" and (state.MonsterNextIn or 0) > 0 then
+			-- The wave countdown lives in this same slot: one message under
+			-- the cash panel, never two overlapping. During Warning/Active
+			-- the monster banner owns the announcement instead.
+			blessingLabel.Text = "Next wave in " .. FormatTime(state.MonsterNextIn)
+			blessingLabel.TextColor3 = Color3.fromRGB(130, 200, 255)
+			blessingLabel.Visible = true
 		else
 			blessingLabel.Visible = false
-		end
-		if state.BlessingRemaining > 0 then
-			blessingLabel.TextColor3 = UIHelpers.AccentGold
 		end
 	end
 	if tanksLabel then

@@ -485,13 +485,21 @@ function FishingClient.Init()
 					promptLabel.Visible = true
 					HideArrow()
 				else
-					-- No spot nearby: this is a TIP, not a quest — say so,
-					-- point at the nearest water with the arrow, and name
-					-- the light beam the player can actually see.
-					promptLabel.Text = "TIP: Follow the light beam to the water — press E to fish!"
-					promptLabel.TextColor3 = UIHelpers.TextDim
-					promptLabel.Visible = true
-					PointArrowAt(FindNearestOwnedSpot())
+					-- No spot nearby. The TIP + arrow are ONBOARDING only:
+					-- once the player has caught a fish they know how to
+					-- fish, and the tip nagging every time they walk away
+					-- from the water is just noise. (The light beams still
+					-- mark the spots for everyone.)
+					local state = ClientState.Get()
+					if (state.TotalCaught or 0) > 0 then
+						promptLabel.Visible = false
+						HideArrow()
+					else
+						promptLabel.Text = "TIP: Follow the light beam to the water — press E to fish!"
+						promptLabel.TextColor3 = UIHelpers.TextDim
+						promptLabel.Visible = true
+						PointArrowAt(FindNearestOwnedSpot())
+					end
 				end
 			elseif fishingPhase == "Waiting" then
 				promptLabel.Text = "Waiting for a bite..."
