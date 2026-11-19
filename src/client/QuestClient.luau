@@ -1,124 +1,160 @@
--- QuestClient: the daily quest panel. Three quests per session with progress
--- bars and CLAIM buttons. Progress is computed server-side from the player's
--- totals, so the panel only reads state and asks to claim.
+-- QuestClient — the daily quest panel: three quests with progress bars
+-- and a claim button each. Progress is tracked by the server and pushed
+-- with the state sync; claiming fires ClaimQuest and the server pays.
+-- A compact quest tracker also sits in the bottom-right of the HUD.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
-local ClientState = require(script.Parent:WaitForChild("ClientState"))
-local UIHelpers = require(script.Parent:WaitForChild("UIHelpers"))
+local ClientState = require(script.Parent.ClientState)
+local UIHelpers = require(script.Parent.UIHelpers)
+local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
 local QuestClient = {}
 
 local player = Players.LocalPlayer
-local panel = nil
-local listFrame = nil
-local isOpen = false
+local remotes = nil
+local questFrame = nil
+local questOpen = false
+local trackerFrame = nil
+local trackerLabels = {}
 
-local function GetRemote(name)
-	return ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild(name)
+function QuestClient.Init(remoteFolder)
+	remotes = remoteFolder
+	-- The compact tracker lives on screen all the time.
+	local playerGui = player:WaitForChild("PlayerGui")
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "QuestTrackerUI"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.Parent = playerGui
+	trackerFrame = UIHelpers.MakeFrame(gui, UDim2.new(0, 240, 0, 110), UDim2.new(1, -256, 1, -230))
+	UIHelpers.MakeLabel(trackerFrame, UDim2.new(1, 0, 0, 24), UDim2.new(0, 0, 0, 4), "DAILY QUESTS", 15, UIHelpers.ACCENT)
+	for i, quest in ipairs(GameConfig.QUESTS) do
+		local label = UIHelpers.MakeLabel(trackerFrame, UDim2.new(1, -16, 0, 24), UDim2.new(0, 8, 0, 28 + (i - 1) * 26),
+			quest.name .. " 0/" .. quest.goal, 14, UIHelpers.TEXT)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		trackerLabels[quest.id] = label
+	end
+	ClientState.OnChange(function(state)
+		QuestClient.RefreshTracker(state)
+	end)
 end
 
-local function RefreshQuests()
-	if not listFrame then
+function QuestClient.RefreshTracker(state)
+	if not trackerFrame then
 		return
 	end
-	for _, child in ipairs(listFrame:GetChildren()) do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
-	end
-	local state = ClientState.Get()
-	for i, configQuest in ipairs(GameConfig.Quests) do
-		local quest = state.Quests and state.Quests[i] or { Progress = 0, Claimed = false }
-		local y = 8 + (i - 1) * 92
-		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, -16, 0, 84)
-		row.Position = UDim2.new(0, 8, 0, y)
-		row.BackgroundColor3 = Color3.fromRGB(30, 38, 66)
-		row.BackgroundTransparency = 0.2
-		row.BorderSizePixel = 0
-		row.Parent = listFrame
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 8)
-		corner.Parent = row
-		UIHelpers.NewLabel(row, "Name", configQuest.Name, UDim2.new(0.6, 0, 0, 26), UDim2.new(0, 12, 0, 8), 18, UIHelpers.TextWhite)
-		-- The reward lives ON the button (it used to be a separate label
-		-- that overlapped the button and got clipped by it).
-		-- Progress bar.
-		local barBack = Instance.new("Frame")
-		barBack.Size = UDim2.new(1, -150, 0, 18)
-		barBack.Position = UDim2.new(0, 12, 0, 44)
-		barBack.BackgroundColor3 = Color3.fromRGB(20, 24, 40)
-		barBack.BorderSizePixel = 0
-		barBack.Parent = row
-		local barCorner = Instance.new("UICorner")
-		barCorner.CornerRadius = UDim.new(0, 6)
-		barCorner.Parent = barBack
-		local fill = Instance.new("Frame")
-		local frac = math.min(quest.Progress / configQuest.Target, 1)
-		fill.Size = UDim2.new(frac, 0, 1, 0)
-		fill.BackgroundColor3 = quest.Claimed and UIHelpers.AccentGreen or UIHelpers.AccentGold
-		fill.BorderSizePixel = 0
-		fill.Parent = barBack
-		local fillCorner = Instance.new("UICorner")
-		fillCorner.CornerRadius = UDim.new(0, 6)
-		fillCorner.Parent = fill
-		UIHelpers.NewLabel(row, "Progress", math.min(quest.Progress, configQuest.Target) .. " / " .. configQuest.Target, UDim2.new(1, -150, 0, 18), UDim2.new(0, 12, 0, 44), 13, UIHelpers.TextWhite).TextXAlignment = Enum.TextXAlignment.Center
-		local button
-		local rewardText = UIHelpers.FormatMoney(configQuest.Reward)
-		if quest.Claimed then
-			button = UIHelpers.NewButton(row, "Claim", "DONE", UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(40, 160, 80), 16, Vector2.new(1, 0.5))
-		elseif quest.Progress >= configQuest.Target then
-			button = UIHelpers.NewButton(row, "Claim", "CLAIM " .. rewardText, UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(220, 160, 20), 15, Vector2.new(1, 0.5))
-			button.MouseButton1Click:Connect(function()
-				GetRemote("ClaimQuest"):FireServer(configQuest.Id)
-			end)
-		else
-			button = UIHelpers.NewButton(row, "Claim", rewardText, UDim2.fromOffset(110, 38), UDim2.new(1, -10, 0.5, 0), Color3.fromRGB(90, 90, 100), 16, Vector2.new(1, 0.5))
+	for _, quest in ipairs(GameConfig.QUESTS) do
+		local label = trackerLabels[quest.id]
+		if label then
+			local entry = state.quests[quest.id] or { progress = 0, claimed = false }
+			if entry.claimed then
+				label.Text = quest.name .. " DONE"
+				label.TextColor3 = UIHelpers.GREEN
+			else
+				label.Text = quest.name .. " " .. entry.progress .. "/" .. quest.goal
+				label.TextColor3 = UIHelpers.TEXT
+			end
 		end
 	end
 end
 
-function QuestClient.Toggle()
-	isOpen = not isOpen
-	if isOpen then
-		if panel then
-			panel.Size = UIHelpers.FitPanelSize(560, 380)
-		end
-		RefreshQuests()
+local function buildQuestPanel()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local gui = playerGui:FindFirstChild("QuestUI")
+	if not gui then
+		gui = Instance.new("ScreenGui")
+		gui.Name = "QuestUI"
+		gui.ResetOnSpawn = false
+		gui.IgnoreGuiInset = true
+		gui.Parent = playerGui
 	end
-	if panel then
-		panel.Visible = isOpen
+	if questFrame then
+		questFrame:Destroy()
 	end
-end
-
-function QuestClient.Init()
-	local gui = player:WaitForChild("PlayerGui"):WaitForChild("BrainrotFishingGui")
-	panel = UIHelpers.NewPanel(gui, "QuestPanel", UIHelpers.FitPanelSize(560, 380), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
-	panel.Visible = false
-	UIHelpers.NewLabel(panel, "Title", "DAILY QUESTS", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 8), 24, UIHelpers.AccentGold).TextXAlignment = Enum.TextXAlignment.Center
-	local closeButton = UIHelpers.NewButton(panel, "Close", "X", UDim2.fromOffset(36, 36), UDim2.new(1, -10, 0, 8), Color3.fromRGB(200, 60, 60), 18, Vector2.new(1, 0))
+	questFrame = UIHelpers.MakeFrame(gui, UDim2.new(0, 480, 0, 400), UDim2.new(0.5, -240, 0.5, -200))
+	UIHelpers.MakeLabel(questFrame, UDim2.new(1, 0, 0, 44), UDim2.new(0, 0, 0, 8), "DAILY QUESTS", 28, UIHelpers.ACCENT)
+	local closeButton = UIHelpers.MakeButton(questFrame, UDim2.new(0, 40, 0, 40), UDim2.new(1, -50, 0, 8), "X", 20)
+	closeButton.BackgroundColor3 = Color3.fromRGB(200, 70, 70)
+	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 	closeButton.MouseButton1Click:Connect(function()
-		QuestClient.Toggle()
+		QuestClient.ToggleQuests()
 	end)
-	UIHelpers.NewLabel(panel, "Note", "Quests reset every session. Finish them for bonus cash!", UDim2.new(1, -20, 0, 22), UDim2.new(0, 10, 0, 46), 14, UIHelpers.TextDim).TextXAlignment = Enum.TextXAlignment.Center
-	-- The list scrolls so the third quest is never cut off on a short viewport.
-	listFrame = Instance.new("ScrollingFrame")
-	listFrame.Name = "QuestList"
-	listFrame.Size = UDim2.new(1, -16, 1, -80)
-	listFrame.Position = UDim2.new(0, 8, 0, 72)
-	listFrame.BackgroundTransparency = 1
-	listFrame.BorderSizePixel = 0
-	listFrame.ScrollBarThickness = 6
-	listFrame.CanvasSize = UDim2.new(0, 0, 0, 284)
-	listFrame.Parent = panel
-	ClientState.Changed.Event:Connect(function()
-		if isOpen then
-			RefreshQuests()
+
+	local state = ClientState.Get()
+	local y = 64
+	for _, quest in ipairs(GameConfig.QUESTS) do
+		local entry = state.quests[quest.id] or { progress = 0, claimed = false }
+		local row = UIHelpers.MakeFrame(questFrame, UDim2.new(1, -16, 0, 80), UDim2.new(0, 8, 0, y),
+			Color3.fromRGB(35, 42, 60), 0.1)
+		UIHelpers.MakeLabel(row, UDim2.new(0.6, 0, 0, 26), UDim2.new(0, 10, 0, 6), quest.name, 18)
+		local progressBar = UIHelpers.MakeFrame(row, UDim2.new(0.6, 0, 0, 14), UDim2.new(0, 10, 0, 40),
+			Color3.fromRGB(60, 65, 80), 0)
+		local fill = Instance.new("Frame")
+		fill.Size = UDim2.new(math.min(entry.progress / quest.goal, 1), 0, 1, 0)
+		fill.BackgroundColor3 = UIHelpers.GREEN
+		fill.BorderSizePixel = 0
+		fill.Parent = progressBar
+		UIHelpers.MakeLabel(row, UDim2.new(0.6, 0, 0, 18), UDim2.new(0, 10, 0, 56),
+			entry.progress .. " / " .. quest.goal .. "  ·  Reward $" .. quest.reward, 13, UIHelpers.MUTED)
+		local claimButton = UIHelpers.MakeButton(row, UDim2.new(0, 110, 0, 40), UDim2.new(1, -122, 0, 20), "CLAIM", 16)
+		if entry.claimed then
+			claimButton.Text = "CLAIMED"
+			claimButton.BackgroundColor3 = Color3.fromRGB(90, 140, 90)
+			claimButton.Active = false
+		elseif entry.progress < quest.goal then
+			claimButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+			claimButton.Active = false
+		else
+			claimButton.MouseButton1Click:Connect(function()
+				remotes.ClaimQuest:FireServer(quest.id)
+				task.wait(0.3)
+				if questOpen then
+					buildQuestPanel()
+				end
+			end)
 		end
-	end)
+		y += 88
+	end
+
+	-- Daily reward row: the 7-day streak, claimable once per UTC day.
+	-- Mirrors the server's day-boundary check (CanClaimDaily).
+	local SECONDS_PER_DAY = 86400
+	local claimedAt = state.dailyClaimedAt or 0
+	local canClaim = claimedAt == 0
+		or math.floor(os.time() / SECONDS_PER_DAY) > math.floor(claimedAt / SECONDS_PER_DAY)
+	local nextDay = math.min((state.dailyDay or 0) + 1, #GameConfig.DAILY_REWARDS)
+	local reward = GameConfig.DAILY_REWARDS[nextDay] or GameConfig.DAILY_REWARDS[1]
+	local dailyRow = UIHelpers.MakeFrame(questFrame, UDim2.new(1, -16, 0, 56), UDim2.new(0, 8, 0, y),
+		Color3.fromRGB(50, 45, 20), 0.1)
+	UIHelpers.MakeLabel(dailyRow, UDim2.new(0.6, 0, 0, 26), UDim2.new(0, 10, 0, 4),
+		"Daily Reward — Day " .. nextDay, 18)
+	UIHelpers.MakeLabel(dailyRow, UDim2.new(0.6, 0, 0, 20), UDim2.new(0, 10, 0, 30),
+		"Come back every day for up to $1,500", 13, UIHelpers.MUTED)
+	local dailyButton = UIHelpers.MakeButton(dailyRow, UDim2.new(0, 110, 0, 40), UDim2.new(1, -122, 0, 8),
+		canClaim and ("CLAIM $" .. reward) or "CLAIMED", 16)
+	if canClaim then
+		dailyButton.MouseButton1Click:Connect(function()
+			remotes.ClaimDaily:FireServer()
+			task.wait(0.3)
+			if questOpen then
+				buildQuestPanel()
+			end
+		end)
+	else
+		dailyButton.BackgroundColor3 = Color3.fromRGB(90, 140, 90)
+		dailyButton.Active = false
+	end
+end
+
+function QuestClient.ToggleQuests()
+	questOpen = not questOpen
+	if questOpen then
+		buildQuestPanel()
+	elseif questFrame then
+		questFrame:Destroy()
+		questFrame = nil
+	end
 end
 
 return QuestClient

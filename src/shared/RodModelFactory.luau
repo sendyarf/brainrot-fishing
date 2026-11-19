@@ -1,61 +1,88 @@
--- RodModelFactory: builds the visible fishing rod model (grip + shaft +
--- reel + tip) for a rod id. Shared so the server (RodToolService, which
--- wraps it in a Tool the character holds) and the client (ShopClient,
--- which shows it in a ViewportFrame preview) use the SAME model — the
--- shop preview is the rod the player will hold, not a lookalike.
--- Fix 12: the Dex shows the fish in 3D, the shop showed nothing.
+-- RodModelFactory — builds the fishing rod Tool a player holds.
+-- Each rod tier gets its own look: bamboo is plain wood, the Dragon Rod
+-- glows red with a golden reel. The tool's Handle is the grip; the shaft
+-- points forward when equipped. RodToolService hands these out on spawn.
 
-local GameConfig = require(script.Parent:WaitForChild("GameConfig"))
+local GameConfig = require(script.Parent.GameConfig)
 
 local RodModelFactory = {}
 
--- Colors per rod tier (shaft, grip, reel, shaft material).
-local RodColors = {
-	Bamboo = { Shaft = Color3.fromRGB(170, 130, 80), Grip = Color3.fromRGB(120, 85, 50), Reel = Color3.fromRGB(90, 90, 90), Material = Enum.Material.Wood },
-	Wooden = { Shaft = Color3.fromRGB(140, 95, 55), Grip = Color3.fromRGB(100, 70, 40), Reel = Color3.fromRGB(90, 90, 90), Material = Enum.Material.Wood },
-	Steel = { Shaft = Color3.fromRGB(150, 155, 165), Grip = Color3.fromRGB(60, 60, 70), Reel = Color3.fromRGB(200, 200, 210), Material = Enum.Material.Metal },
-	Golden = { Shaft = Color3.fromRGB(255, 210, 60), Grip = Color3.fromRGB(180, 140, 40), Reel = Color3.fromRGB(255, 220, 100), Material = Enum.Material.Metal },
-	Dragon = { Shaft = Color3.fromRGB(180, 40, 50), Grip = Color3.fromRGB(80, 20, 30), Reel = Color3.fromRGB(255, 170, 60), Material = Enum.Material.SmoothPlastic },
+local ROD_LOOKS = {
+	bamboo = { shaft = Color3.fromRGB(190, 160, 110), grip = Color3.fromRGB(140, 100, 60), reel = Color3.fromRGB(120, 120, 120), glow = false },
+	wooden = { shaft = Color3.fromRGB(150, 105, 60), grip = Color3.fromRGB(100, 70, 40), reel = Color3.fromRGB(140, 140, 140), glow = false },
+	steel = { shaft = Color3.fromRGB(170, 180, 190), grip = Color3.fromRGB(60, 60, 70), reel = Color3.fromRGB(200, 200, 210), glow = false },
+	golden = { shaft = Color3.fromRGB(240, 200, 80), grip = Color3.fromRGB(120, 80, 30), reel = Color3.fromRGB(255, 220, 100), glow = true },
+	dragon = { shaft = Color3.fromRGB(180, 50, 40), grip = Color3.fromRGB(40, 30, 30), reel = Color3.fromRGB(255, 200, 60), glow = true },
 }
 
-local function MakePart(model, name, size, cframe, color, material, shape)
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Size = size
-	part.CFrame = cframe
-	part.Color = color
-	part.Material = material
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanQuery = false
-	if shape then
-		part.Shape = shape
-	end
-	part.Parent = model
-	return part
-end
+-- Builds a Tool for the given rod id. Returns the Tool, unparented.
+function RodModelFactory.BuildRodTool(rodId)
+	local rod = GameConfig.GetRodById(rodId)
+	local look = ROD_LOOKS[rod.id] or ROD_LOOKS.bamboo
 
--- Builds the rod Model for a rod id (not parented). Parts are placed
--- relative to the Handle (grip) at the origin, so the rod stands ~6.4
--- studs tall along +Y. The caller decides the use: RodToolService moves
--- the parts into a Tool (unanchored + welded), ShopClient drops the
--- whole Model into a ViewportFrame.
-function RodModelFactory.BuildRodModel(rodId)
-	local def = GameConfig.Rods[rodId] or GameConfig.Rods.Bamboo
-	local colors = RodColors[rodId] or RodColors.Bamboo
-	local model = Instance.new("Model")
-	model.Name = def.Name
-	-- Grip the hand holds (the Tool's Handle), 1.4 tall.
-	MakePart(model, "Handle", Vector3.new(0.35, 1.4, 0.35), CFrame.new(0, 0, 0), colors.Grip, Enum.Material.Wood)
-	-- Shaft: 5-stud cylinder along +Y from the top of the grip.
-	MakePart(model, "Shaft", Vector3.new(5, 0.18, 0.18), CFrame.new(0, 3.2, 0) * CFrame.Angles(0, 0, math.rad(90)), colors.Shaft, colors.Material, Enum.PartType.Cylinder)
-	-- Tip: thin lighter section at the top.
-	MakePart(model, "Tip", Vector3.new(0.8, 0.1, 0.1), CFrame.new(0, 6.0, 0) * CFrame.Angles(0, 0, math.rad(90)), colors.Shaft, colors.Material, Enum.PartType.Cylinder)
-	-- Reel body on the front of the grip + a small crank knob.
-	MakePart(model, "Reel", Vector3.new(0.5, 0.5, 0.35), CFrame.new(0, 0.45, 0.32), colors.Reel, Enum.Material.Metal)
-	MakePart(model, "ReelKnob", Vector3.new(0.35, 0.14, 0.14), CFrame.new(0.4, 0.45, 0.32), colors.Reel, Enum.Material.Metal, Enum.PartType.Cylinder)
-	model.PrimaryPart = model:FindFirstChild("Handle")
-	return model
+	local tool = Instance.new("Tool")
+	tool.Name = rod.name
+	tool.RequiresHandle = true
+	tool.CanBeDropped = false
+	tool.ManualActivationOnly = false
+
+	-- Grip (the Handle the hand holds).
+	local grip = Instance.new("Part")
+	grip.Name = "Handle"
+	grip.Size = Vector3.new(0.3, 0.3, 1.4)
+	grip.Color = look.grip
+	grip.Material = Enum.Material.Wood
+	grip.CanCollide = false
+	grip.Parent = tool
+
+	-- Shaft, angled up from the grip.
+	local shaft = Instance.new("Part")
+	shaft.Name = "Shaft"
+	shaft.Size = Vector3.new(0.14, 0.14, 4.2)
+	shaft.Color = look.shaft
+	shaft.Material = look.glow and Enum.Material.Metal or Enum.Material.Wood
+	shaft.CanCollide = false
+	shaft.CFrame = CFrame.new(0, 0.9, -2.2) * CFrame.Angles(math.rad(-35), 0, 0)
+	shaft.Parent = tool
+
+	-- Reel at the base of the shaft.
+	local reel = Instance.new("Part")
+	reel.Name = "Reel"
+	reel.Shape = Enum.PartType.Cylinder
+	reel.Size = Vector3.new(0.4, 0.5, 0.5)
+	reel.Color = look.reel
+	reel.Material = Enum.Material.Metal
+	reel.CanCollide = false
+	reel.CFrame = CFrame.new(0.25, 0.2, -0.6)
+	reel.Parent = tool
+
+	-- Tip guide ring.
+	local tip = Instance.new("Part")
+	tip.Name = "TipGuide"
+	tip.Size = Vector3.new(0.2, 0.2, 0.2)
+	tip.Color = look.reel
+	tip.Material = Enum.Material.Metal
+	tip.CanCollide = false
+	tip.CFrame = CFrame.new(0, 2.3, -3.9)
+	tip.Parent = tool
+
+	-- Weld the parts together so the tool holds its shape.
+	for _, part in ipairs({ shaft, reel, tip }) do
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = grip
+		weld.Part1 = part
+		weld.Parent = grip
+	end
+
+	if look.glow then
+		local light = Instance.new("PointLight")
+		light.Color = rod.id == "dragon" and Color3.fromRGB(255, 100, 60) or Color3.fromRGB(255, 220, 120)
+		light.Range = 5
+		light.Brightness = 1
+		light.Parent = reel
+	end
+
+	return tool
 end
 
 return RodModelFactory

@@ -5,8 +5,8 @@
 [![reward](https://make.fun/badge/roblox-brainrot-01/sendyarf/brainrot-fishing/reward.svg)](https://make.fun/bounty/roblox-brainrot-01?utm_source=github&utm_medium=readme&utm_campaign=roblox-brainrot-01)
 
 **Fish, steal, lock, rebirth.** A 3D voxel fishing game on Roblox where you catch 12 original
-brainrot fish, fill money-making tanks, steal from rivals, and guard your base from shadow
-thieves — built by an AI agent for [make.fun](https://make.fun/bounty/roblox-brainrot-01)'s
+brainrot fish, fill money-making tanks, steal from rivals, and guard your base from the lake
+monster — built by an AI agent for [make.fun](https://make.fun/bounty/roblox-brainrot-01)'s
 "Make the best AI Roblox brainrot game" bounty ($1,000 in USDC).
 
 Play it: https://www.roblox.com/games/86979109472260/Brainrot-Fishing
@@ -16,8 +16,8 @@ Play it: https://www.roblox.com/games/86979109472260/Brainrot-Fishing
 - **Fish** in four ponds (Shallow, Deep, Abyss, Royal) with a reel minigame — land the needle
   on green three times to catch. Rarer ponds, rarer fish: Mythic rates run 1% to 10%.
 - **Earn** — every fish in your tanks pays $/second, even while you're offline (50%, capped).
-- **Steal** — hold E for 3 seconds at a rival's tank to snatch their best fish. A shadow thief
-  can do the same to you.
+- **Steal** — hold E for 3 seconds at a rival's tank to snatch their best fish. Other players
+  can do the same to you — lock your base or stand guard.
 - **Lock your base** — 5 minutes of protection, 10-minute cooldown. Time it well.
 - **Events** — the lake monster Naga Nila stirs every 4–6 minutes: reel fast (10s limit) or
   lose fish, but a catch during the event pays a blessing.

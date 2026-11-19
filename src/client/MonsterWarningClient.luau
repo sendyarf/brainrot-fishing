@@ -1,100 +1,82 @@
--- MonsterWarningClient: the lake monster's drama. Warning banner + countdown
--- while Naga Nila stirs, a red alert while the event is active (reels have a
--- 10-second limit!), and the calm + blessing message when it ends. A screen
--- tint sells the mood shift.
+-- MonsterWarningClient — the monster event banner and countdown.
+-- When the Naga Nila stirs, a full-width banner warns every player with
+-- a live countdown; during the event it counts the danger down and tells
+-- the player to finish reels fast and guard their tanks. After the event
+-- it shows the Calm Water Blessing. The banner is the game's loudest
+-- piece of feedback — it must be impossible to miss.
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local UIHelpers = require(script.Parent:WaitForChild("UIHelpers"))
+local UIHelpers = require(script.Parent.UIHelpers)
 
 local MonsterWarningClient = {}
 
 local player = Players.LocalPlayer
-local banner = nil
+local bannerFrame = nil
 local bannerTitle = nil
-local bannerSub = nil
-local tint = nil
-local countdownUntil = 0
-local countdownConnection = nil
+local bannerCountdown = nil
+local currentPhase = "idle"
+-- Epoch token: each phase change bumps it, and a stale countdown loop
+-- (task.spawn returns a thread, which has no Disconnect) exits quietly
+-- when its token no longer matches.
+local countdownEpoch = 0
 
-local function GetRemote(name)
-	return ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild(name)
-end
+function MonsterWarningClient.Init(remoteFolder)
+	local playerGui = player:WaitForChild("PlayerGui")
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "MonsterWarningUI"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.Parent = playerGui
 
-local function StopCountdown()
-	if countdownConnection then
-		countdownConnection:Disconnect()
-		countdownConnection = nil
-	end
-end
+	bannerFrame = UIHelpers.MakeFrame(gui, UDim2.new(0, 520, 0, 84), UDim2.new(0.5, -260, 0, 16),
+		Color3.fromRGB(60, 15, 15), 0.1)
+	bannerFrame.Visible = false
+	bannerTitle = UIHelpers.MakeLabel(bannerFrame, UDim2.new(1, 0, 0.55, 0), UDim2.new(0, 0, 0.05, 0),
+		"THE LAKE STIRS...", 28, Color3.fromRGB(255, 120, 120))
+	bannerCountdown = UIHelpers.MakeLabel(bannerFrame, UDim2.new(1, 0, 0.35, 0), UDim2.new(0, 0, 0.6, 0), "", 18)
 
-local function StartCountdown(seconds, label)
-	StopCountdown()
-	countdownUntil = os.clock() + seconds
-	countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
-		local remaining = math.max(0, countdownUntil - os.clock())
-		bannerSub.Text = label .. "  " .. string.format("%.0f", remaining) .. "s"
-		if remaining <= 0 then
-			StopCountdown()
-		end
+	remoteFolder.MonsterPhase.OnClientEvent:Connect(function(phase, secondsLeft)
+		MonsterWarningClient.OnPhaseChanged(phase, secondsLeft)
 	end)
 end
 
-function MonsterWarningClient.Init()
-	local gui = player:WaitForChild("PlayerGui"):WaitForChild("BrainrotFishingGui")
+function MonsterWarningClient.OnPhaseChanged(phase, secondsLeft)
+	currentPhase = phase
+	countdownEpoch += 1
+	local myEpoch = countdownEpoch
 
-	-- Full-screen tint (subtle, never blocks clicks).
-	tint = Instance.new("Frame")
-	tint.Name = "MonsterTint"
-	tint.Size = UDim2.fromScale(1, 1)
-	tint.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
-	tint.BackgroundTransparency = 1
-	tint.BorderSizePixel = 0
-	tint.Active = false
-	tint.Parent = gui
+	if phase == "idle" then
+		bannerFrame.Visible = false
+		return
+	end
 
-	-- Slim one-line strip under the cash panel. The old 560x76 two-line
-	-- banner overlapped the reel minigame on short viewports and felt huge.
-	banner = UIHelpers.NewPanel(gui, "MonsterBanner", UDim2.fromOffset(540, 40), UDim2.new(0.5, 0, 0, 100), Vector2.new(0.5, 0))
-	banner.BackgroundColor3 = Color3.fromRGB(60, 15, 15)
-	banner.Visible = false
-	bannerTitle = UIHelpers.NewLabel(banner, "Title", "THE LAKE STIRS...", UDim2.fromOffset(180, 40), UDim2.new(0, 10, 0, 0), 18, Color3.fromRGB(255, 120, 120))
-	bannerTitle.TextXAlignment = Enum.TextXAlignment.Left
-	bannerSub = UIHelpers.NewLabel(banner, "Sub", "", UDim2.new(1, -200, 1, 0), UDim2.new(0, 190, 0, 0), 15, UIHelpers.TextWhite)
-	bannerSub.TextXAlignment = Enum.TextXAlignment.Left
+	bannerFrame.Visible = true
+	if phase == "warning" then
+		bannerTitle.Text = "THE LAKE STIRS..."
+		bannerTitle.TextColor3 = Color3.fromRGB(255, 120, 120)
+		bannerCountdown.Text = "NAGA NILA rises in " .. secondsLeft .. "s — guard your tanks!"
+	elseif phase == "active" then
+		bannerTitle.Text = "NAGA NILA STIRS!"
+		bannerTitle.TextColor3 = Color3.fromRGB(255, 60, 60)
+		bannerCountdown.Text = "Finish your reel in 10s! Unguarded tanks can be raided!"
+	elseif phase == "blessing" then
+		bannerTitle.Text = "THE LAKE CALMS..."
+		bannerTitle.TextColor3 = Color3.fromRGB(120, 220, 255)
+		bannerCountdown.Text = "Calm Water Blessing: +10% luck for 60s!"
+	end
 
-	GetRemote("MonsterEvent").OnClientEvent:Connect(function(kind, data)
-		data = data or {}
-		if kind == "warning" then
-			bannerTitle.Text = "THE LAKE STIRS..."
-			bannerTitle.TextColor3 = Color3.fromRGB(255, 180, 100)
-			banner.BackgroundColor3 = Color3.fromRGB(60, 30, 10)
-			tint.BackgroundColor3 = Color3.fromRGB(120, 60, 20)
-			tint.BackgroundTransparency = 0.88
-			banner.Visible = true
-			StartCountdown(data.Seconds or 15, "Look at the lake — Naga Nila is coming!")
-		elseif kind == "active" then
-			bannerTitle.Text = "NAGA NILA STIRS!"
-			bannerTitle.TextColor3 = Color3.fromRGB(255, 90, 90)
-			banner.BackgroundColor3 = Color3.fromRGB(60, 15, 15)
-			tint.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
-			tint.BackgroundTransparency = 0.85
-			banner.Visible = true
-			StartCountdown(data.Seconds or 30, "Reel fast — 10s limit! Guard your tanks!")
-		elseif kind == "ended" then
-			StopCountdown()
-			bannerTitle.Text = "The lake calms..."
-			bannerTitle.TextColor3 = UIHelpers.AccentGreen
-			bannerSub.Text = "Calm Water Blessing: +10% luck, 60s!"
-			banner.BackgroundColor3 = Color3.fromRGB(15, 50, 25)
-			tint.BackgroundTransparency = 1
-			banner.Visible = true
-			task.delay(5, function()
-				banner.Visible = false
-			end)
-		elseif kind == "raided" then
-			UIHelpers.ShowToast("A shadow thief stole your " .. (data.FishName or "fish") .. "!", UIHelpers.AccentRed, 5)
+	-- Live countdown, ticking once a second until the phase ends or a
+	-- newer phase change makes this loop stale.
+	local remaining = secondsLeft
+	task.spawn(function()
+		while remaining > 0 and currentPhase == phase and countdownEpoch == myEpoch do
+			task.wait(1)
+			remaining -= 1
+			if phase == "warning" then
+				bannerCountdown.Text = "NAGA NILA rises in " .. remaining .. "s — guard your tanks!"
+			elseif phase == "active" then
+				bannerCountdown.Text = "Monster active for " .. remaining .. "s — finish your reel fast!"
+			end
 		end
 	end)
 end

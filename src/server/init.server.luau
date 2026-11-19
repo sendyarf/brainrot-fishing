@@ -1,232 +1,240 @@
--- init.server.luau: Brainrot Fishing server bootstrap.
--- Order matters: build the world first, then create the RemoteEvents, then
--- require the services (they WaitForChild the events), then wire the handlers.
---
--- ROJO GOTCHA: this is an init.server.luau file, so Rojo turns the src/server
--- folder itself into the "Server" Script, and every sibling ModuleScript is a
--- CHILD of this script. Require them via script:WaitForChild — script.Parent
--- is ServerScriptService, where they will never appear. The old script.Parent
--- form hung this whole script forever on line 1: no world, no RemoteEvents,
--- no services, and players spawned with no ground and fell to their deaths.
--- (The ModuleScripts themselves correctly use script.Parent, because for
--- them script.Parent IS this Server script.)
+-- init.server.luau — server entry point for Brainrot Fishing.
+-- Rojo turns this file's folder into a Script named "Server", so every
+-- ModuleScript beside it is a CHILD of this script: require them with
+-- script:WaitForChild, never script.Parent (that is ServerScriptService
+-- and hangs forever). This script creates the RemoteEvents, requires
+-- every service, wires the remotes, and handles player join/leave.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- 1. Build the 3D world (lake, pier, islands, base plots, monster).
-local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
-WorldBuilder.BuildWorld()
-
--- 2. Create every RemoteEvent the client and server share.
-local remoteEvents = Instance.new("Folder")
-remoteEvents.Name = "RemoteEvents"
-remoteEvents.Parent = ReplicatedStorage
-local remoteNames = {
-	"StateSync",
-	"FishingUpdate",
-	"CatchBanner",
-	"MonsterEvent",
-	"StealUpdate",
-	"ShopResult",
-	"RebirthResult",
-	"QuestResult",
-	"OfflineEarnings",
-	"CollectionComplete",
-	"DailyRewardResult",
-	"CastFish",
-	"ReelResult",
-	"BuyItem",
-	"LockBase",
-	"DoRebirth",
-	"ClaimQuest",
-	"ClaimDaily",
-	"RodHolster",
-}
-for _, name in ipairs(remoteNames) do
-	local event = Instance.new("RemoteEvent")
-	event.Name = name
-	event.Parent = remoteEvents
-end
-local function GetRemote(name)
-	return remoteEvents:WaitForChild(name)
-end
-
--- 3. Require the services (they find the RemoteEvents already created).
-local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
+-- All server modules are children of this Script.
 local DataService = require(script:WaitForChild("DataService"))
 local EconomyService = require(script:WaitForChild("EconomyService"))
-local FishingService = require(script:WaitForChild("FishingService"))
+local CatchService = require(script:WaitForChild("CatchService"))
 local TankService = require(script:WaitForChild("TankService"))
+local FishingService = require(script:WaitForChild("FishingService"))
 local ShopService = require(script:WaitForChild("ShopService"))
 local StealService = require(script:WaitForChild("StealService"))
+local MonsterState = require(script:WaitForChild("MonsterState"))
 local MonsterEventService = require(script:WaitForChild("MonsterEventService"))
 local RebirthService = require(script:WaitForChild("RebirthService"))
 local QuestService = require(script:WaitForChild("QuestService"))
+local DailyRewardService = require(script:WaitForChild("DailyRewardService"))
+local LeaderboardService = require(script:WaitForChild("LeaderboardService"))
 local RodToolService = require(script:WaitForChild("RodToolService"))
-RodToolService.Init() -- visible rod in hand, on spawn and after unequip
+local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
+local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
--- 4. Wire the client -> server handlers.
-GetRemote("CastFish").OnServerEvent:Connect(function(player, spotId)
+-- ---------------------------------------------------------------------------
+-- RemoteEvents (client <-> server). Created once, before any player joins.
+-- ---------------------------------------------------------------------------
+
+local remoteFolder = Instance.new("Folder")
+remoteFolder.Name = "RemoteEvents"
+remoteFolder.Parent = ReplicatedStorage
+
+local function makeRemote(name)
+	local remote = Instance.new("RemoteEvent")
+	remote.Name = name
+	remote.Parent = remoteFolder
+	return remote
+end
+
+local CastFish = makeRemote("CastFish")
+local ReelResult = makeRemote("ReelResult")
+local BuyItem = makeRemote("BuyItem")
+local StealFish = makeRemote("StealFish")
+local LockBase = makeRemote("LockBase")
+local DoRebirth = makeRemote("DoRebirth")
+local ClaimQuest = makeRemote("ClaimQuest")
+local ClaimDaily = makeRemote("ClaimDaily")
+local StateSync = makeRemote("StateSync")
+local CatchBanner = makeRemote("CatchBanner")
+local MonsterPhase = makeRemote("MonsterPhase")
+local StealAlert = makeRemote("StealAlert")
+local Notify = makeRemote("Notify")
+local LeaderboardUpdate = makeRemote("LeaderboardUpdate")
+
+-- ---------------------------------------------------------------------------
+-- Service wiring
+-- ---------------------------------------------------------------------------
+
+DataService.Init()
+
+EconomyService.Init({
+	DataService = DataService,
+	StateSync = StateSync,
+	MonsterState = MonsterState,
+})
+
+TankService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	Notify = Notify,
+})
+
+FishingService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	CatchService = CatchService,
+	TankService = TankService,
+	QuestService = QuestService,
+	MonsterState = MonsterState,
+	CatchBanner = CatchBanner,
+	Notify = Notify,
+})
+
+ShopService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	TankService = TankService,
+	RodToolService = RodToolService,
+	Notify = Notify,
+})
+
+StealService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	TankService = TankService,
+	Notify = Notify,
+	StealAlert = StealAlert,
+})
+
+MonsterEventService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	TankService = TankService,
+	StealService = StealService,
+	MonsterState = MonsterState,
+	MonsterPhase = MonsterPhase,
+	Notify = Notify,
+})
+
+RebirthService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	RodToolService = RodToolService,
+	Notify = Notify,
+})
+
+QuestService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	Notify = Notify,
+})
+
+DailyRewardService.Init({
+	DataService = DataService,
+	EconomyService = EconomyService,
+	Notify = Notify,
+})
+
+LeaderboardService.Init({
+	DataService = DataService,
+	LeaderboardUpdate = LeaderboardUpdate,
+})
+
+RodToolService.Init({
+	DataService = DataService,
+})
+
+-- ---------------------------------------------------------------------------
+-- World + remote handlers
+-- ---------------------------------------------------------------------------
+
+WorldBuilder.BuildWorld()
+MonsterEventService.SetMonsterModel(WorldBuilder.GetMonsterModel())
+LeaderboardService.SetBoardSurface(WorldBuilder.GetLeaderboardSurface())
+
+CastFish.OnServerEvent:Connect(function(player, spotId)
 	FishingService.StartCast(player, spotId)
 end)
-GetRemote("ReelResult").OnServerEvent:Connect(function(player, zone)
-	FishingService.ResolveReel(player, zone)
+
+ReelResult.OnServerEvent:Connect(function(player, success, points, perfectHits)
+	FishingService.ResolveReel(player, success, points, perfectHits)
 end)
-GetRemote("BuyItem").OnServerEvent:Connect(function(player, category, itemId)
-	if category == "rod" then
-		ShopService.BuyRod(player, itemId)
-	elseif category == "bait" then
-		ShopService.BuyBait(player, itemId)
-	elseif category == "slot" then
-		ShopService.BuyTankSlot(player)
-	elseif category == "spot" then
-		ShopService.BuyFishingSpot(player, itemId)
-	end
+
+BuyItem.OnServerEvent:Connect(function(player, category, itemId)
+	ShopService.BuyItem(player, category, itemId)
 end)
-GetRemote("LockBase").OnServerEvent:Connect(function(player)
+
+StealFish.OnServerEvent:Connect(function(player, ownerUserId, tankIndex)
+	StealService.CompleteSteal(player, ownerUserId, tankIndex)
+end)
+
+LockBase.OnServerEvent:Connect(function(player)
 	StealService.LockBase(player)
 end)
-GetRemote("DoRebirth").OnServerEvent:Connect(function(player)
+
+DoRebirth.OnServerEvent:Connect(function(player)
 	RebirthService.DoRebirth(player)
 end)
-GetRemote("ClaimQuest").OnServerEvent:Connect(function(player, questId)
+
+ClaimQuest.OnServerEvent:Connect(function(player, questId)
 	QuestService.ClaimQuestReward(player, questId)
 end)
-GetRemote("RodHolster").OnServerEvent:Connect(function(player, value)
-	RodToolService.SetHolstered(player, value)
+
+ClaimDaily.OnServerEvent:Connect(function(player)
+	DailyRewardService.ClaimDailyReward(player)
 end)
 
--- Daily reward: one claim per day, escalating with the streak (max 7 days).
-local function ClaimDailyReward(player)
-	local data = DataService.GetData(player)
-	if not data then
-		return
-	end
-	local today = math.floor(os.time() / 86400)
-	if data.LastDailyClaimDay >= today then
-		GetRemote("DailyRewardResult"):FireClient(player, { Success = false, Message = "Come back tomorrow!" })
-		return
-	end
-	if data.LastDailyClaimDay == today - 1 then
-		data.DailyStreak = data.DailyStreak + 1
-	else
-		data.DailyStreak = 1
-	end
-	data.DailyStreak = math.min(data.DailyStreak, #GameConfig.DailyRewards)
-	data.LastDailyClaimDay = today
-	local reward = GameConfig.DailyRewards[data.DailyStreak]
-	data.Cash = data.Cash + reward
-	data.TotalEarned = data.TotalEarned + reward
-	DataService.BroadcastState(player)
-	GetRemote("DailyRewardResult"):FireClient(player, {
-		Success = true,
-		Reward = reward,
-		Streak = data.DailyStreak,
-	})
-end
-GetRemote("ClaimDaily").OnServerEvent:Connect(ClaimDailyReward)
+-- ---------------------------------------------------------------------------
+-- Player lifecycle
+-- ---------------------------------------------------------------------------
 
--- 5. Steal prompts: every tank's ProximityPrompt feeds StealService.
-local function ConnectStealPrompt(prompt)
-	if prompt.Name ~= "StealPrompt" then
-		return
-	end
-	prompt.PromptButtonHoldBegan:Connect(function(player)
-		local ownerUserId = prompt:GetAttribute("OwnerUserId")
-		local tankIndex = prompt:GetAttribute("TankIndex")
-		local owner = ownerUserId and Players:GetPlayerByUserId(ownerUserId) or nil
-		if owner and tankIndex then
-			StealService.StartSteal(player, owner, tankIndex)
-		end
-	end)
-	prompt.PromptButtonHoldEnded:Connect(function(player)
-		StealService.ReleaseHold(player)
-	end)
-end
-game:GetService("Workspace").DescendantAdded:Connect(function(descendant)
-	if descendant:IsA("ProximityPrompt") then
-		ConnectStealPrompt(descendant)
-	end
-end)
+local usedPlots = {} -- [plotIndex] = userId
 
--- 6. Player lifecycle.
-local function SetPlotSign(plotIndex, title, subtitle)
-	local world = game:GetService("Workspace"):FindFirstChild("BrainrotFishingWorld")
-	if not world then
-		return
-	end
-	local plot = world:FindFirstChild("BasePlot" .. plotIndex)
-	local sign = plot and plot:FindFirstChild("OwnerSign")
-	local gui = sign and sign:FindFirstChild("SignLabel")
-	if gui then
-		local titleLabel = gui:FindFirstChild("Title")
-		local subLabel = gui:FindFirstChild("Subtitle")
-		if titleLabel then
-			titleLabel.Text = title
-		end
-		if subLabel then
-			subLabel.Text = subtitle
+local function assignPlot(player)
+	for i, plot in ipairs(GameConfig.WORLD.basePlots) do
+		if not usedPlots[i] then
+			usedPlots[i] = player.UserId
+			return plot, i
 		end
 	end
+	-- More players than plots: share the last plot's area, offset aside.
+	return GameConfig.WORLD.basePlots[#GameConfig.WORLD.basePlots] + Vector3.new(0, 0, 18), 0
 end
 
-local function OnPlayerAdded(player)
+local function onPlayerAdded(player)
 	local data = DataService.LoadPlayerData(player)
-	TankService.RebuildPlayerTanks(player)
-	SetPlotSign(data.PlotIndex, player.Name .. "'s Base", "Tanks: " .. #data.Tanks .. "/" .. data.TankSlots)
-	if data.CollectionBonusClaimed then
-		DataService.GrantMasterAnglerTitle(player)
-	end
-	DataService.BroadcastState(player)
-	-- Dying cancels any in-progress fishing.
-	player.CharacterAdded:Connect(function(character)
-		local humanoid = character:WaitForChild("Humanoid")
-		humanoid.Died:Connect(function()
-			FishingService.CancelFishing(player)
-		end)
-		-- Spawn safety net: put the character on the pier even if the
-		-- SpawnLocation is ever missed, and rescue any fall into the void
-		-- (a character below y = -50 is teleported back, never left falling).
-		local root = character:WaitForChild("HumanoidRootPart")
-		root.CFrame = CFrame.new(GameConfig.SpawnPosition)
-		task.spawn(function()
-			while character.Parent do
-				task.wait(0.5)
-				if root.Parent and root.Position.Y < -50 then
-					root.CFrame = CFrame.new(GameConfig.SpawnPosition)
-				end
-			end
-		end)
+	local plotPosition, plotIndex = assignPlot(player)
+	TankService.SetupBase(player, plotPosition)
+	player:SetAttribute("PlotIndex", plotIndex)
+
+	-- Offline earnings for returning players, then the first state sync.
+	DailyRewardService.PayOfflineEarnings(player)
+	EconomyService.PushState(player)
+	LeaderboardService.RefreshLeaderboard()
+
+	player.CharacterAdded:Connect(function()
+		RodToolService.OnCharacterAdded(player)
 	end)
+	-- If the character already exists, hand the rod out now.
+	if player.Character then
+		RodToolService.GiveRodToPlayer(player)
+	end
 end
 
-local function OnPlayerRemoving(player)
+local function onPlayerRemoving(player)
 	FishingService.CancelFishing(player)
+	TankService.TeardownBase(player)
+	local plotIndex = player:GetAttribute("PlotIndex") or 0
+	if plotIndex > 0 then
+		usedPlots[plotIndex] = nil
+	end
 	DataService.SavePlayerData(player)
-	local data = DataService.GetData(player)
-	if data then
-		SetPlotSign(data.PlotIndex, "OPEN BASE", "Your tanks go here")
-	end
-	DataService.RemovePlayerData(player)
+	DataService.ClearData(player)
+	FishingService.ClearPlayer(player)
+	StealService.ClearPlayer(player)
 end
 
-Players.PlayerAdded:Connect(OnPlayerAdded)
-Players.PlayerRemoving:Connect(OnPlayerRemoving)
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+-- Players who joined before this script ran (Studio playtest edge case).
 for _, player in ipairs(Players:GetPlayers()) do
-	task.spawn(OnPlayerAdded, player)
+	task.spawn(onPlayerAdded, player)
 end
 
--- 7. Start the loops: income tick, monster scheduler, autosave.
-EconomyService.StartIncomeLoop()
-MonsterEventService.ScheduleNextEvent()
-task.spawn(function()
-	while true do
-		task.wait(GameConfig.AutosaveSeconds)
-		for _, player in ipairs(Players:GetPlayers()) do
-			DataService.SavePlayerData(player)
-		end
-	end
-end)
-
-print("Brainrot Fishing server started: world built, services live.")
+print("[Brainrot Fishing] Server ready. Tight lines!")

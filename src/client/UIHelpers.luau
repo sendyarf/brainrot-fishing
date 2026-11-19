@@ -1,110 +1,56 @@
--- UIHelpers: the shared look of Brainrot Fishing's UI. Dark navy panels with
--- rounded corners, gold accents, bold white text — one style everywhere so the
--- HUD stays neat and readable at 768x480. Also money formatting and toasts.
-
-local Players = game:GetService("Players")
+-- UIHelpers — small shared builders for the client UI: rounded frames,
+-- bold labels and buttons with a consistent look (dark panels, warm
+-- sunset accent, thick readable text). Every client module builds its
+-- panels through these so the HUD stays coherent.
 
 local UIHelpers = {}
 
-UIHelpers.PanelColor = Color3.fromRGB(18, 24, 46)
-UIHelpers.PanelTransparency = 0.15
-UIHelpers.AccentGold = Color3.fromRGB(255, 210, 60)
-UIHelpers.AccentGreen = Color3.fromRGB(120, 255, 140)
-UIHelpers.AccentRed = Color3.fromRGB(255, 90, 90)
-UIHelpers.TextWhite = Color3.fromRGB(255, 255, 255)
-UIHelpers.TextDim = Color3.fromRGB(200, 210, 230)
-UIHelpers.Font = Enum.Font.GothamBold
+UIHelpers.ACCENT = Color3.fromRGB(255, 170, 60)
+UIHelpers.PANEL = Color3.fromRGB(25, 30, 45)
+UIHelpers.PANEL_TRANSPARENCY = 0.15
+UIHelpers.TEXT = Color3.fromRGB(255, 255, 255)
+UIHelpers.MUTED = Color3.fromRGB(180, 190, 210)
+UIHelpers.GREEN = Color3.fromRGB(120, 255, 140)
+UIHelpers.RED = Color3.fromRGB(255, 90, 90)
 
--- Formats 1234567 as "$1,234,567".
-function UIHelpers.FormatMoney(amount)
-	local n = math.floor(amount or 0)
-	local s = tostring(n)
-	local out = ""
-	while #s > 3 do
-		out = "," .. s:sub(-3) .. out
-		s = s:sub(1, -4)
-	end
-	return "$" .. s .. out
-end
-
--- A rounded, slightly transparent panel frame.
-function UIHelpers.NewPanel(parent, name, size, position, anchorPoint)
+function UIHelpers.MakeFrame(parent, size, position, color, transparency)
 	local frame = Instance.new("Frame")
-	frame.Name = name
 	frame.Size = size
 	frame.Position = position
-	if anchorPoint then
-		frame.AnchorPoint = anchorPoint
-	end
-	frame.BackgroundColor3 = UIHelpers.PanelColor
-	frame.BackgroundTransparency = UIHelpers.PanelTransparency
+	frame.BackgroundColor3 = color or UIHelpers.PANEL
+	frame.BackgroundTransparency = transparency == nil and UIHelpers.PANEL_TRANSPARENCY or transparency
 	frame.BorderSizePixel = 0
 	frame.Parent = parent
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 10)
 	corner.Parent = frame
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(255, 210, 60)
-	stroke.Transparency = 0.7
-	stroke.Thickness = 1.5
-	stroke.Parent = frame
 	return frame
 end
 
--- Fits a modal panel to the player's actual viewport: the designed size, but
--- never wider or taller than the screen minus a 24px margin. The modals were
--- fixed 660x480 / 640x480 / 560x380 offsets, which overflowed smaller
--- windows — on a ~480-tall viewport the SHOP/DEX panels filled the whole
--- screen with the title and X cut off (playtest 19 Nov 03:43).
-function UIHelpers.FitPanelSize(width, height)
-	local camera = game:GetService("Workspace").CurrentCamera
-	local view = camera and camera.ViewportSize or Vector2.new(1024, 600)
-	-- At client start the viewport can still be (0,0) (camera not rendered
-	-- yet): that made every modal 0x0 in fix 6 — only a stray X and title
-	-- fragment showed. Fall back to a sane size, and never go below a
-	-- usable minimum.
-	if view.X < 100 or view.Y < 100 then
-		view = Vector2.new(1024, 600)
-	end
-	return UDim2.fromOffset(
-		math.clamp(math.min(width, view.X - 24), 300, width),
-		math.clamp(math.min(height, view.Y - 24), 200, height))
-end
-
--- A bold text label (transparent background).
-function UIHelpers.NewLabel(parent, name, text, size, position, textSize, textColor, anchorPoint)
+function UIHelpers.MakeLabel(parent, size, position, text, textSize, color, font)
 	local label = Instance.new("TextLabel")
-	label.Name = name
-	label.Text = text
 	label.Size = size
 	label.Position = position
-	if anchorPoint then
-		label.AnchorPoint = anchorPoint
-	end
 	label.BackgroundTransparency = 1
-	label.TextColor3 = textColor or UIHelpers.TextWhite
+	label.Font = font or Enum.Font.GothamBold
 	label.TextSize = textSize or 18
-	label.Font = UIHelpers.Font
-	label.TextStrokeTransparency = 0.6
+	label.TextColor3 = color or UIHelpers.TEXT
+	label.Text = text
+	label.TextWrapped = true
 	label.Parent = parent
 	return label
 end
 
--- A rounded button with bold text.
-function UIHelpers.NewButton(parent, name, text, size, position, bgColor, textSize, anchorPoint)
+function UIHelpers.MakeButton(parent, size, position, text, textSize)
 	local button = Instance.new("TextButton")
-	button.Name = name
-	button.Text = text
 	button.Size = size
 	button.Position = position
-	if anchorPoint then
-		button.AnchorPoint = anchorPoint
-	end
-	button.BackgroundColor3 = bgColor or Color3.fromRGB(50, 90, 200)
+	button.BackgroundColor3 = UIHelpers.ACCENT
 	button.BorderSizePixel = 0
-	button.TextColor3 = Color3.fromRGB(255, 255, 255)
+	button.Font = Enum.Font.GothamBold
 	button.TextSize = textSize or 18
-	button.Font = UIHelpers.Font
+	button.TextColor3 = Color3.fromRGB(40, 25, 5)
+	button.Text = text
 	button.AutoButtonColor = true
 	button.Parent = parent
 	local corner = Instance.new("UICorner")
@@ -113,50 +59,16 @@ function UIHelpers.NewButton(parent, name, text, size, position, bgColor, textSi
 	return button
 end
 
--- A small toast message at the top-center of the screen (shared by all panels).
-local toastLabel = nil
-local toastConnection = nil
-function UIHelpers.ShowToast(text, color, duration)
-	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-	local gui = playerGui:FindFirstChild("BrainrotFishingGui")
-	if not gui then
-		return
+-- Formats a dollar amount with commas: 1234567 -> $1,234,567.
+function UIHelpers.FormatCash(amount)
+	local rounded = math.floor(amount + 0.5)
+	local text = tostring(rounded)
+	local formatted = ""
+	while #text > 3 do
+		formatted = "," .. string.sub(text, -3) .. formatted
+		text = string.sub(text, 1, -4)
 	end
-	if not toastLabel then
-		toastLabel = Instance.new("TextLabel")
-		toastLabel.Name = "Toast"
-		toastLabel.AnchorPoint = Vector2.new(0.5, 0)
-		toastLabel.Position = UDim2.new(0.5, 0, 0.14, 0)
-		toastLabel.Size = UDim2.new(0, 520, 0, 40)
-		toastLabel.BackgroundColor3 = Color3.fromRGB(18, 24, 46)
-		toastLabel.BackgroundTransparency = 0.15
-		toastLabel.TextColor3 = UIHelpers.TextWhite
-		toastLabel.TextSize = 18
-		toastLabel.Font = UIHelpers.Font
-		toastLabel.TextStrokeTransparency = 0.5
-		toastLabel.Visible = false
-		toastLabel.Parent = gui
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 8)
-		corner.Parent = toastLabel
-	end
-	if toastConnection then
-		toastConnection:Disconnect()
-		toastConnection = nil
-	end
-	toastLabel.Text = text
-	toastLabel.TextColor3 = color or UIHelpers.TextWhite
-	toastLabel.Visible = true
-	local shownAt = os.clock()
-	toastConnection = game:GetService("RunService").Heartbeat:Connect(function()
-		if os.clock() - shownAt > (duration or 3) then
-			toastLabel.Visible = false
-			if toastConnection then
-				toastConnection:Disconnect()
-				toastConnection = nil
-			end
-		end
-	end)
+	return "$" .. text .. formatted
 end
 
 return UIHelpers

@@ -1,48 +1,55 @@
--- ClientState: the client's copy of the server state snapshot. HUDClient writes
--- it on every StateSync; every panel reads it. Changed fires after each update.
+-- ClientState — the client's cache of the server's truth. The server
+-- pushes the full player state on join and after every change; this
+-- module holds the latest copy and lets every UI module read it without
+-- asking the server again. It never writes game state itself: purchases,
+-- casts and claims all go through RemoteEvents to the server.
 
 local ClientState = {}
 
 local state = {
-	Cash = 0,
-	Income = 0,
-	Rod = "Bamboo",
-	Bait = "Bread",
-	TankSlots = 3,
-	TankCount = 0,
-	Tanks = {},
-	Spots = { Shallow = true, Deep = false, Abyss = false, Royal = false },
-	Rebirths = 0,
-	RebirthMultiplier = 1,
-	LockRemaining = 0,
-	LockCooldownRemaining = 0,
-	BlessingRemaining = 0,
-	TangledRemaining = 0,
-	MonsterNextIn = 0,
-	MonsterPhase = "Calm",
-	Quests = {},
-	Collection = {},
-	CaughtByTier = { Common = 0, Rare = 0, Epic = 0, Legendary = 0, Mythic = 0 },
-	TotalCaught = 0,
-	TotalEarned = 0,
-	PlotIndex = 0,
-	DailyStreak = 0,
-	LastDailyClaimDay = 0,
+	cash = 0,
+	incomePerSecond = 0,
+	rebirthMultiplier = 1,
+	rebirths = 0,
+	rod = "bamboo",
+	bait = "bread",
+	tankSlots = 3,
+	tankUsed = 0,
+	fish = {},
+	spots = {},
+	collection = {},
+	totalCaught = 0,
+	quests = {},
+	dailyDay = 0,
+	blessingActive = false,
+	blessingSeconds = 0,
 }
 
-ClientState.Changed = Instance.new("BindableEvent")
+local listeners = {}
+
+function ClientState.Update(newState)
+	for key, value in pairs(newState) do
+		state[key] = value
+	end
+	for _, listener in ipairs(listeners) do
+		local ok, err = pcall(listener, state)
+		if not ok then
+			warn("[ClientState] Listener failed: " .. tostring(err))
+		end
+	end
+end
 
 function ClientState.Get()
 	return state
 end
 
-function ClientState.Update(snapshot)
-	if type(snapshot) == "table" then
-		for key, value in pairs(snapshot) do
-			state[key] = value
-		end
-		ClientState.Changed:Fire(state)
-	end
+function ClientState.GetField(field)
+	return state[field]
+end
+
+-- UI modules register here to redraw when the state changes.
+function ClientState.OnChange(listener)
+	table.insert(listeners, listener)
 end
 
 return ClientState

@@ -1,237 +1,160 @@
--- MonsterEventService: the lake monster (Naga Nila) stirs every 4-6 minutes.
--- 15 seconds of warning (banner, darkening sky, ripples), then 30 seconds of
--- event: reels must finish in 10 seconds or the rod tangles, and each
--- unlocked, unguarded tank has a 25% chance to lose its cheapest fish.
--- Afterward the lake calms and every angler gets the Calm Water Blessing
--- (+10% luck for 60 seconds). Functions: ScheduleNextEvent, StartMonsterEvent,
--- RaidUnlockedTanks.
+-- MonsterEventService — the lake monster event, this game's named threat.
+-- Every 4-6 minutes the Naga Nila stirs: a 15-second warning (darkening
+-- sky, banner, countdown), then 30 seconds of chaos (the monster surfaces,
+-- reels have a 10-second limit, unguarded tanks can be raided), then the
+-- lake calms and every player gets the Calm Water Blessing (+10% luck
+-- for 60 seconds). Locked bases and guarded tanks are immune to raids.
+-- The scheduler loop is wrapped in pcall: one error must never stop the
+-- event from ever firing again.
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
-local FishDefinitions = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishDefinitions"))
-local DataService = require(script.Parent:WaitForChild("DataService"))
-local TankService = require(script.Parent:WaitForChild("TankService"))
-local WaveThiefService = require(script.Parent:WaitForChild("WaveThiefService"))
-local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
-local MonsterState = require(script.Parent:WaitForChild("MonsterState"))
+local Lighting = game:GetService("Lighting")
+local GameConfig = require(game:GetService("ReplicatedStorage").Shared.GameConfig)
+local FishDefinitions = require(game:GetService("ReplicatedStorage").Shared.FishDefinitions)
 
 local MonsterEventService = {}
 
-local function GetRemote(name)
-	return ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild(name)
+local dataService = nil
+local economyService = nil
+local tankService = nil
+local stealService = nil
+local monsterState = nil
+local monsterPhaseEvent = nil
+local notifyEvent = nil
+
+local monsterModel = nil -- set by WorldBuilder via SetMonsterModel
+local originalClockTime = 17.5
+local originalAmbient = Color3.fromRGB(102, 76, 89)
+
+function MonsterEventService.Init(deps)
+	dataService = deps.DataService
+	economyService = deps.EconomyService
+	tankService = deps.TankService
+	stealService = deps.StealService
+	monsterState = deps.MonsterState
+	monsterPhaseEvent = deps.MonsterPhase
+	notifyEvent = deps.Notify
+
+	task.spawn(function()
+		-- First event comes early so a short session still sees the monster.
+		task.wait(GameConfig.MONSTER_FIRST_DELAY_SECONDS)
+		while true do
+			local success, err = pcall(function()
+				MonsterEventService.RunEventCycle()
+			end)
+			if not success then
+				warn("[MonsterEventService] Event cycle failed: " .. tostring(err))
+				monsterState.SetPhase("idle", 0)
+				MonsterEventService.RestoreSky()
+			end
+			local nextIn = math.random(GameConfig.MONSTER_INTERVAL_MIN_SECONDS, GameConfig.MONSTER_INTERVAL_MAX_SECONDS)
+			task.wait(nextIn)
+		end
+	end)
 end
 
-local function GetRootPosition(player)
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	return root and root.Position or nil
+function MonsterEventService.SetMonsterModel(model)
+	monsterModel = model
 end
 
--- Each unlocked, unguarded tank has a 25% chance to be robbed. The theft is
--- no longer instant: a shadow thief walks in from the lake and channels on
--- the tank, so the owner can see it coming and save the fish by guarding
--- or locking the base before the channel finishes. At least one thief is
--- guaranteed per eligible victim per wave: a wave that rolls zero trips
--- looks identical to a broken event (the player never sees the thief).
+local function broadcastPhase()
+	if monsterPhaseEvent then
+		monsterPhaseEvent:FireAllClients(monsterState.GetPhase(), monsterState.GetPhaseSecondsLeft())
+	end
+end
+
+function MonsterEventService.DarkenSky()
+	originalClockTime = Lighting.ClockTime
+	originalAmbient = Lighting.Ambient
+	Lighting.ClockTime = 19.5
+	Lighting.Ambient = Color3.fromRGB(40, 30, 50)
+end
+
+function MonsterEventService.RestoreSky()
+	Lighting.ClockTime = originalClockTime
+	Lighting.Ambient = originalAmbient
+end
+
+local function showMonster(visible)
+	if not monsterModel then
+		return
+	end
+	for _, part in ipairs(monsterModel:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Transparency = visible and 0 or 1
+		elseif part:IsA("PointLight") then
+			part.Enabled = visible
+		end
+	end
+end
+
+-- One full event: warning → active → blessing.
+function MonsterEventService.RunEventCycle()
+	-- WARNING: 15 seconds of dread.
+	monsterState.SetPhase("warning", GameConfig.MONSTER_WARNING_SECONDS)
+	MonsterEventService.DarkenSky()
+	broadcastPhase()
+	task.wait(GameConfig.MONSTER_WARNING_SECONDS)
+
+	-- ACTIVE: 30 seconds of the monster on the surface.
+	monsterState.SetPhase("active", GameConfig.MONSTER_DURATION_SECONDS)
+	showMonster(true)
+	broadcastPhase()
+	MonsterEventService.RaidUnlockedTanks()
+	task.wait(GameConfig.MONSTER_DURATION_SECONDS)
+
+	-- CALM: the monster sinks, the blessing begins.
+	showMonster(false)
+	MonsterEventService.RestoreSky()
+	monsterState.SetPhase("blessing", GameConfig.BLESSING_DURATION_SECONDS)
+	broadcastPhase()
+	if notifyEvent then
+		notifyEvent:FireAllClients("The lake calms... Calm Water Blessing: +10% luck for 60s!")
+	end
+	task.wait(GameConfig.BLESSING_DURATION_SECONDS)
+
+	monsterState.SetPhase("idle", 0)
+	broadcastPhase()
+end
+
+-- Raids every unlocked, unguarded tank once per event: each tank has a
+-- 25% chance to lose its cheapest fish to the monster.
 function MonsterEventService.RaidUnlockedTanks()
 	for _, player in ipairs(Players:GetPlayers()) do
-		local data = DataService.GetData(player)
-		if data and #data.Tanks > 0 and data.LockUntil <= os.clock() then
-			local basePos = TankService.GetBasePosition(player)
-			local playerPos = GetRootPosition(player)
-			local guarding = playerPos and (playerPos - basePos).Magnitude <= GameConfig.MonsterGuardRadius
-			if not guarding then
-				local trips = 0
-				for _ = 1, #data.Tanks do
-					if math.random() < GameConfig.MonsterRaidChance then
-						trips = trips + 1
+		local data = dataService.GetData(player)
+		if data and #data.fish > 0 then
+			-- Locked bases are immune.
+			if stealService and stealService.IsBaseLocked(player) then
+				continue
+			end
+			-- A player standing near their base guards the tanks.
+			local guarded = false
+			local character = player.Character
+			local basePosition = tankService.GetBasePosition(player)
+			if character and character:FindFirstChild("HumanoidRootPart") and basePosition then
+				local distance = (character.HumanoidRootPart.Position - basePosition).Magnitude
+				guarded = distance <= GameConfig.MONSTER_GUARD_RADIUS
+			end
+			if guarded then
+				continue
+			end
+			-- Roll the raid: 25% per event, one fish at most.
+			if math.random(1, 100) <= GameConfig.MONSTER_RAID_CHANCE_PERCENT then
+				local cheapestIndex = tankService.GetCheapestFishIndex(player)
+				if cheapestIndex then
+					local stolen = tankService.RemoveFishFromTank(player, cheapestIndex)
+					if stolen then
+						local fish = FishDefinitions.GetFishById(stolen.fishId)
+						local fishName = fish and fish.name or "a fish"
+						if notifyEvent then
+							notifyEvent:FireClient(player, "The monster raided your tank! Lost " .. fishName .. ".")
+						end
+						economyService.PushState(player)
 					end
 				end
-				trips = math.clamp(trips, 1, 3)
-				WaveThiefService.SendThief(player, trips)
 			end
 		end
 	end
-end
-
--- Shows or hides the monster's shadow, fin and head. Fin/Head are Models
--- (fix 12 voxel parts), so every descendant part is toggled.
-local function SetContainerTransparency(container, value)
-	if not container then
-		return
-	end
-	if container:IsA("BasePart") then
-		container.Transparency = value
-	else
-		for _, part in ipairs(container:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.Transparency = value
-			end
-		end
-	end
-end
-
-local function SetMonsterVisible(shadowOnly, fullyVisible)
-	local parts = WorldBuilder.GetMonsterParts()
-	if not parts.Shadow then
-		return
-	end
-	parts.Shadow.Transparency = (shadowOnly or fullyVisible) and 0.35 or 1
-	SetContainerTransparency(parts.Fin, fullyVisible and 0 or 1)
-	SetContainerTransparency(parts.Head, fullyVisible and 0 or 1)
-	if parts.GlowDisc then
-		parts.GlowDisc.Transparency = (shadowOnly or fullyVisible) and 0.55 or 1
-	end
-	if parts.Glow then
-		parts.Glow.Enabled = fullyVisible
-	end
-end
-
--- The sky is a mood signal (top-1 games tint it per event): red-orange
--- while the monster is out, golden while the Calm Water Blessing is
--- active, warm sunset otherwise. Normal matches the values the world
--- was built with (WorldBuilder only sets the Atmosphere, never Lighting,
--- so Ambient/OutdoorAmbient are the engine defaults 128,128,128).
-local SKY = {
-	Normal = {
-		ClockTime = 17.6,
-		Brightness = 2.4,
-		FogColor = Color3.fromRGB(235, 158, 140),
-		Ambient = Color3.fromRGB(128, 128, 128),
-		OutdoorAmbient = Color3.fromRGB(128, 128, 128),
-		AtmosphereColor = Color3.fromRGB(255, 170, 130),
-		AtmosphereDecay = Color3.fromRGB(140, 90, 160),
-	},
-	Wave = {
-		ClockTime = 19.2,
-		Brightness = 1.0,
-		FogColor = Color3.fromRGB(180, 60, 40),
-		Ambient = Color3.fromRGB(90, 30, 30),
-		OutdoorAmbient = Color3.fromRGB(140, 50, 40),
-		AtmosphereColor = Color3.fromRGB(255, 100, 60),
-		AtmosphereDecay = Color3.fromRGB(120, 40, 60),
-	},
-	Blessing = {
-		ClockTime = 17.6,
-		Brightness = 2.8,
-		FogColor = Color3.fromRGB(255, 210, 120),
-		Ambient = Color3.fromRGB(255, 225, 170),
-		OutdoorAmbient = Color3.fromRGB(255, 215, 140),
-		AtmosphereColor = Color3.fromRGB(255, 210, 130),
-		AtmosphereDecay = Color3.fromRGB(180, 130, 80),
-	},
-}
-
--- Blood-red water during the wave (fix 12): the lake surface + the spot
--- water patches turn dark blood red while the monster stirs, then return
--- to their normal colors when the sky calms. The beams keep their colors
--- (they mark the spots, they are not lake water).
-local BLOOD_RED = Color3.fromRGB(140, 15, 20)
-local LAKE_BLUE = Color3.fromRGB(35, 140, 180)
-
-local function SetWater(red)
-	local parts = WorldBuilder.GetLakeParts()
-	if not parts.Lake then
-		return
-	end
-	parts.Lake.Color = red and BLOOD_RED or LAKE_BLUE
-	if parts.Patches then
-		for spotId, patch in pairs(parts.Patches) do
-			local spot = GameConfig.Spots[spotId]
-			local normal = spot and spot.WaterColor or LAKE_BLUE
-			patch.Color = red and BLOOD_RED or normal
-			local light = patch:FindFirstChildOfClass("PointLight")
-			if light then
-				light.Color = red and Color3.fromRGB(255, 60, 60) or normal
-			end
-		end
-	end
-end
-
-local function SetSky(mode)
-	local s = SKY[mode] or SKY.Normal
-	local lighting = game:GetService("Lighting")
-	lighting.ClockTime = s.ClockTime
-	lighting.Brightness = s.Brightness
-	lighting.FogColor = s.FogColor
-	lighting.Ambient = s.Ambient
-	lighting.OutdoorAmbient = s.OutdoorAmbient
-	local atmosphere = lighting:FindFirstChild("SunsetHaze")
-	if atmosphere then
-		atmosphere.Color = s.AtmosphereColor
-		atmosphere.Decay = s.AtmosphereDecay
-	end
-	SetWater(mode == "Wave")
-end
-
--- Runs one full event cycle: warning -> active -> calm + blessing.
-function MonsterEventService.StartMonsterEvent()
-	MonsterState.SetPhase("Warning")
-	SetMonsterVisible(true, false)
-	SetSky("Wave")
-	GetRemote("MonsterEvent"):FireAllClients("warning", { Seconds = GameConfig.MonsterWarningSeconds })
-	task.wait(GameConfig.MonsterWarningSeconds)
-
-	MonsterState.SetPhase("Active")
-	MonsterState.SetActive(true)
-	SetMonsterVisible(false, true)
-	GetRemote("MonsterEvent"):FireAllClients("active", { Seconds = GameConfig.MonsterDuration })
-	MonsterEventService.RaidUnlockedTanks()
-	task.wait(GameConfig.MonsterDuration)
-
-	MonsterState.SetPhase("Calm")
-	MonsterState.SetActive(false)
-	SetMonsterVisible(false, false)
-	SetSky("Blessing")
-	-- Calm Water Blessing: +10% luck for 60 seconds for everyone.
-	for _, player in ipairs(Players:GetPlayers()) do
-		local data = DataService.GetData(player)
-		if data then
-			data.BlessingUntil = os.clock() + GameConfig.BlessingDuration
-		end
-	end
-	GetRemote("MonsterEvent"):FireAllClients("ended", { Seconds = GameConfig.BlessingDuration })
-	DataService.BroadcastAll()
-	-- Golden sky while the blessing lasts, then back to the normal
-	-- sunset. The phase check guards against a new wave starting
-	-- inside the 60 seconds (the scheduler waits 4-6 minutes, so it
-	-- should not happen — but a stuck golden sky would be worse).
-	task.spawn(function()
-		task.wait(GameConfig.BlessingDuration)
-		if MonsterState.GetPhase() == "Calm" then
-			SetSky("Normal")
-		end
-	end)
-end
-
--- Schedules the next event, then loops forever. The FIRST wave comes after
--- 90 seconds so a new player actually sees the monster; later waves are
--- 4-6 minutes apart. The event body runs inside a pcall: one error inside
--- an event must never kill the scheduler and silence every future wave.
-function MonsterEventService.ScheduleNextEvent()
-	task.spawn(function()
-		local first = true
-		while true do
-			local waitTime
-			if first then
-				waitTime = GameConfig.MonsterFirstDelay
-				first = false
-			else
-				waitTime = GameConfig.MonsterIntervalMin + math.random() * (GameConfig.MonsterIntervalMax - GameConfig.MonsterIntervalMin)
-			end
-			MonsterState.SetNextEventAt(os.clock() + waitTime)
-			task.wait(waitTime)
-			local ok, err = pcall(MonsterEventService.StartMonsterEvent)
-			if not ok then
-				warn("[BrainrotFishing] Monster event failed: " .. tostring(err))
-				MonsterState.SetPhase("Calm")
-				MonsterState.SetActive(false)
-				SetSky("Normal")
-			end
-		end
-	end)
 end
 
 return MonsterEventService

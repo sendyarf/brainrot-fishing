@@ -1,189 +1,155 @@
--- StealService: the steal-and-lock game. A thief holds E for 3 seconds at an
--- unlocked tank; the victim gets an alert; the channel breaks if the owner
--- comes within 12 studs or the thief lets go or walks away. LOCK BASE locks
--- every tank for 5 minutes (10-minute cooldown, free).
--- Functions: StartSteal, CancelSteal, CompleteSteal, LockBase.
+-- StealService — stealing fish from other players' tanks, and the base
+-- lock that stops it. A thief holds E on a tank for 3 seconds (the
+-- ProximityPrompt does the hold); the server validates at completion:
+-- the tank must be unlocked, the owner must not be nearby, and the thief
+-- needs a free tank slot. LOCK BASE seals every tank for 5 minutes with
+-- a 10-minute cooldown. No combat, no damage — stealing is the only
+-- player-vs-player interaction, and that is enough.
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
-local FishDefinitions = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishDefinitions"))
-local DataService = require(script.Parent:WaitForChild("DataService"))
-local TankService = require(script.Parent:WaitForChild("TankService"))
-local EconomyService = require(script.Parent:WaitForChild("EconomyService"))
+local GameConfig = require(game:GetService("ReplicatedStorage").Shared.GameConfig)
+local FishDefinitions = require(game:GetService("ReplicatedStorage").Shared.FishDefinitions)
 
 local StealService = {}
 
--- activeSteals[thief] = { Owner, TankIndex, Holding }
-local activeSteals = {}
+local dataService = nil
+local economyService = nil
+local tankService = nil
+local notifyEvent = nil
+local stealAlertEvent = nil
 
-local function GetRemote(name)
-	return ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild(name)
+-- [userId] = { lockedUntil, cooldownUntil } (os.clock seconds)
+local lockState = {}
+
+function StealService.Init(deps)
+	dataService = deps.DataService
+	economyService = deps.EconomyService
+	tankService = deps.TankService
+	notifyEvent = deps.Notify
+	stealAlertEvent = deps.StealAlert
 end
 
-local function GetRootPosition(player)
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	return root and root.Position or nil
+function StealService.IsBaseLocked(player)
+	local state = lockState[player.UserId]
+	if not state then
+		return false
+	end
+	return os.clock() < state.lockedUntil
 end
 
--- Cancels a thief's in-progress steal (released E, walked away, or owner near).
-function StealService.CancelSteal(thief, reason)
-	local steal = activeSteals[thief]
-	if not steal then
-		return
+function StealService.GetLockSecondsLeft(player)
+	local state = lockState[player.UserId]
+	if not state then
+		return 0
 	end
-	activeSteals[thief] = nil
-	GetRemote("StealUpdate"):FireClient(thief, "cancelled", { Reason = reason or "Steal cancelled." })
+	return math.max(0, state.lockedUntil - os.clock())
 end
 
--- Completes a steal: the fish moves to the thief's tank (or sells if full).
-function StealService.CompleteSteal(thief)
-	local steal = activeSteals[thief]
-	if not steal then
-		return
+function StealService.GetLockCooldownSecondsLeft(player)
+	local state = lockState[player.UserId]
+	if not state then
+		return 0
 	end
-	activeSteals[thief] = nil
-	local owner = steal.Owner
-	local ownerData = DataService.GetData(owner)
-	local thiefData = DataService.GetData(thief)
-	if not ownerData or not thiefData then
-		return
-	end
-	local stolen = TankService.RemoveFishFromTank(owner, steal.TankIndex)
-	if not stolen then
-		return
-	end
-	local def = FishDefinitions.Fish[stolen.FishId]
-	local result, soldFor = TankService.AddFishToTank(thief, stolen.FishId, stolen.Mutation)
-	if result == "sold" then
-		EconomyService.AddCash(thief, soldFor)
-	end
-	DataService.BroadcastState(owner)
-	DataService.BroadcastState(thief)
-	GetRemote("StealUpdate"):FireClient(thief, "stolen", {
-		FishName = def and def.Name or "Fish",
-		SoldFor = result == "sold" and soldFor or 0,
-	})
-	GetRemote("StealUpdate"):FireClient(owner, "victim", {
-		FishName = def and def.Name or "Fish",
-		ThiefName = thief.Name,
-	})
+	return math.max(0, state.cooldownUntil - os.clock())
 end
 
--- Begins a 3-second steal channel. The channel is watched every 0.2s: it
--- breaks if the owner comes within 12 studs, the thief leaves the tank, or
--- the thief releases the prompt.
-function StealService.StartSteal(thief, owner, tankIndex)
-	if thief == owner then
-		return
-	end
-	if activeSteals[thief] then
-		return
-	end
-	local ownerData = DataService.GetData(owner)
-	local thiefData = DataService.GetData(thief)
-	if not ownerData or not thiefData then
-		return
-	end
-	if ownerData.LockUntil > os.clock() then
-		GetRemote("StealUpdate"):FireClient(thief, "blocked", { Reason = "That base is locked!" })
-		return
-	end
-	local tank = ownerData.Tanks[tankIndex]
-	if not tank then
-		return
-	end
-	local tankPos = TankService.GetTankPosition(owner, tankIndex)
-	local ownerPos = GetRootPosition(owner)
-	if ownerPos and (ownerPos - tankPos).Magnitude <= GameConfig.StealCancelRadius then
-		GetRemote("StealUpdate"):FireClient(thief, "blocked", { Reason = "The owner is guarding this tank!" })
-		return
-	end
-	local def = FishDefinitions.Fish[tank.FishId]
-	activeSteals[thief] = { Owner = owner, TankIndex = tankIndex, Holding = true }
-	-- Alert the victim immediately.
-	GetRemote("StealUpdate"):FireClient(owner, "alert", {
-		FishName = def and def.Name or "Fish",
-		ThiefName = thief.Name,
-	})
-	GetRemote("StealUpdate"):FireClient(thief, "started", { FishName = def and def.Name or "Fish" })
-
-	-- Watch the channel: 15 checks of 0.2s = 3 seconds.
-	task.spawn(function()
-		for _ = 1, 15 do
-			task.wait(0.2)
-			local steal = activeSteals[thief]
-			if not steal or not steal.Holding then
-				return
-			end
-			local ownerDataNow = DataService.GetData(owner)
-			if not ownerDataNow or ownerDataNow.LockUntil > os.clock() then
-				StealService.CancelSteal(thief, "The base was locked!")
-				return
-			end
-			if not ownerDataNow.Tanks[steal.TankIndex] then
-				StealService.CancelSteal(thief, "That fish is gone.")
-				return
-			end
-			local thiefPos = GetRootPosition(thief)
-			if not thiefPos or (thiefPos - tankPos).Magnitude > 10 then
-				StealService.CancelSteal(thief, "You moved too far from the tank.")
-				return
-			end
-			local ownerPosNow = GetRootPosition(owner)
-			if ownerPosNow and (ownerPosNow - tankPos).Magnitude <= GameConfig.StealCancelRadius then
-				StealService.CancelSteal(thief, "The owner caught you!")
-				return
-			end
-		end
-		StealService.CompleteSteal(thief)
-	end)
-end
-
--- Marks a thief's hold as released (ProximityPrompt hold ended).
-function StealService.ReleaseHold(thief)
-	local steal = activeSteals[thief]
-	if steal then
-		steal.Holding = false
-		StealService.CancelSteal(thief, "You let go.")
-	end
-end
-
--- Locks ALL of the player's tanks for 5 minutes (10-minute cooldown, free).
+-- Locks the player's base for 5 minutes. Free, 10-minute cooldown.
 function StealService.LockBase(player)
-	local data = DataService.GetData(player)
-	if not data then
-		return
+	local state = lockState[player.UserId]
+	if not state then
+		state = { lockedUntil = 0, cooldownUntil = 0 }
+		lockState[player.UserId] = state
 	end
-	local now = os.clock()
-	if data.LockUntil > now then
-		GetRemote("StealUpdate"):FireClient(player, "lockinfo", { Message = "Your base is already locked." })
-		return
-	end
-	if data.LockCooldownUntil > now then
-		local remaining = math.ceil(data.LockCooldownUntil - now)
-		GetRemote("StealUpdate"):FireClient(player, "lockinfo", { Message = "Lock recharges in " .. remaining .. "s." })
-		return
-	end
-	data.LockUntil = now + GameConfig.LockDuration
-	data.LockCooldownUntil = now + GameConfig.LockCooldown
-	TankService.SetLockVisual(player, true)
-	DataService.BroadcastState(player)
-	GetRemote("StealUpdate"):FireClient(player, "locked", { Duration = GameConfig.LockDuration })
-	-- Auto-unlock visuals when the lock expires.
-	task.delay(GameConfig.LockDuration, function()
-		local current = DataService.GetData(player)
-		if current and current.LockUntil <= os.clock() then
-			TankService.SetLockVisual(player, false)
-			DataService.BroadcastState(player)
+	if os.clock() < state.cooldownUntil then
+		local left = math.ceil(state.cooldownUntil - os.clock())
+		if notifyEvent then
+			notifyEvent:FireClient(player, "Lock is on cooldown (" .. left .. "s left).")
 		end
-	end)
+		return false
+	end
+	state.lockedUntil = os.clock() + GameConfig.LOCK_DURATION_SECONDS
+	state.cooldownUntil = os.clock() + GameConfig.LOCK_COOLDOWN_SECONDS
+	if notifyEvent then
+		notifyEvent:FireClient(player, "Base locked for 5 minutes! Your tanks are safe.")
+	end
+	economyService.PushState(player)
+	return true
 end
 
-Players.PlayerRemoving:Connect(function(player)
-	activeSteals[player] = nil
-end)
+-- Attempts a steal: thief takes the fish at tankIndex from the owner's base.
+-- Returns true if the fish changed hands.
+function StealService.CompleteSteal(thief, ownerUserId, tankIndex)
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	if not owner or owner == thief then
+		return false
+	end
+	if StealService.IsBaseLocked(owner) then
+		if notifyEvent then
+			notifyEvent:FireClient(thief, "That base is locked!")
+		end
+		return false
+	end
+
+	-- The owner standing close to the tank cancels the steal.
+	local ownerCharacter = owner.Character
+	local thiefCharacter = thief.Character
+	if ownerCharacter and ownerCharacter:FindFirstChild("HumanoidRootPart") then
+		local basePosition = tankService.GetBasePosition(owner)
+		if basePosition then
+			local distance = (ownerCharacter.HumanoidRootPart.Position - basePosition).Magnitude
+			if distance <= GameConfig.STEAL_OWNER_CANCEL_RADIUS then
+				if notifyEvent then
+					notifyEvent:FireClient(thief, "The owner is guarding their base!")
+				end
+				return false
+			end
+		end
+	end
+
+	-- The thief must be near the victim's base to steal.
+	if thiefCharacter and thiefCharacter:FindFirstChild("HumanoidRootPart") then
+		local basePosition = tankService.GetBasePosition(owner)
+		if basePosition then
+			local distance = (thiefCharacter.HumanoidRootPart.Position - basePosition).Magnitude
+			if distance > 25 then
+				return false
+			end
+		end
+	end
+
+	local stolen = tankService.RemoveFishFromTank(owner, tankIndex)
+	if not stolen then
+		return false
+	end
+
+	local fish = FishDefinitions.GetFishById(stolen.fishId)
+	local fishName = fish and fish.name or "a fish"
+
+	-- The stolen fish goes into the thief's tank, or sells if full.
+	local placed, salePrice = tankService.AddFishToTank(thief, stolen)
+	if not placed then
+		economyService.AddCash(thief, salePrice, "steal_overflow_sale")
+		if notifyEvent then
+			notifyEvent:FireClient(thief, "Stole " .. fishName .. "! Tanks full, sold for $" .. salePrice)
+		end
+	else
+		if notifyEvent then
+			notifyEvent:FireClient(thief, "You stole " .. fishName .. "!")
+		end
+	end
+
+	-- The victim gets an alert with the thief's name.
+	if stealAlertEvent then
+		stealAlertEvent:FireClient(owner, thief.Name, fishName)
+	end
+
+	economyService.PushState(owner)
+	economyService.PushState(thief)
+	return true
+end
+
+function StealService.ClearPlayer(player)
+	lockState[player.UserId] = nil
+end
 
 return StealService

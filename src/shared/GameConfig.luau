@@ -1,172 +1,213 @@
--- GameConfig: every number the game runs on lives here (prices, rates, timers).
--- One config file so the economy can be tuned without touching any logic.
--- Client and server both read it (it lives in ReplicatedStorage/Shared).
+-- GameConfig — every tunable number in Brainrot Fishing, in one place.
+-- Prices, catch odds, timers and world positions live here so the economy
+-- can be rebalanced without touching any system's logic.
 
 local GameConfig = {}
 
 -- ---------------------------------------------------------------------------
--- Fishing spots. Position = the marker players stand near; Radius = cast zone.
--- Rates = rarity weights (out of 100) with a Bamboo Rod and Bread bait.
+-- Economy
 -- ---------------------------------------------------------------------------
-GameConfig.Spots = {
-	Shallow = {
-		Name = "Shallow Shore",
-		Price = 0,
-		Position = Vector3.new(4, 1, 22),
-		Radius = 12,
-		WaterColor = Color3.fromRGB(110, 220, 200),
-		Rates = { Common = 60, Rare = 25, Epic = 10, Legendary = 4, Mythic = 1 },
-	},
-	Deep = {
-		Name = "Deep Dock",
-		Price = 500,
-		Position = Vector3.new(0, 1, -62),
-		Radius = 12,
-		WaterColor = Color3.fromRGB(40, 140, 210),
-		Rates = { Common = 45, Rare = 30, Epic = 17, Legendary = 6, Mythic = 2 },
-	},
-	Abyss = {
-		Name = "Abyss Point",
-		Price = 2500,
-		Position = Vector3.new(-70, 1, -95),
-		Radius = 12,
-		WaterColor = Color3.fromRGB(25, 60, 170),
-		Rates = { Common = 30, Rare = 30, Epic = 25, Legendary = 11, Mythic = 4 },
-	},
-	Royal = {
-		Name = "Royal Pond",
-		Price = 0,
-		Position = Vector3.new(70, 1, -95),
-		Radius = 12,
-		WaterColor = Color3.fromRGB(255, 214, 90),
-		Rates = { Common = 15, Rare = 25, Epic = 30, Legendary = 20, Mythic = 10 },
-	},
-}
-GameConfig.SpotOrder = { "Shallow", "Deep", "Abyss", "Royal" }
+
+GameConfig.STARTING_CASH = 0
+GameConfig.INCOME_TICK_SECONDS = 1
+GameConfig.TANK_FULL_SELL_MULTIPLIER = 100 -- overflow catch sells for income * 100
+GameConfig.MAX_REBIRTHS = 5
+GameConfig.REBIRTH_CASH_REQUIRED = 25000
+GameConfig.REBIRTH_MULTIPLIER_PER_LEVEL = 0.5 -- +50% income per rebirth, additive
+GameConfig.COMPLETE_DEX_BONUS_CASH = 2000
 
 -- ---------------------------------------------------------------------------
--- Rods: one active at a time; buying is a permanent upgrade.
--- PerfectBonus widens the reel minigame's Perfect zone (percentage points).
+-- Rods (one active; buying is a permanent upgrade)
 -- ---------------------------------------------------------------------------
-GameConfig.Rods = {
-	Bamboo = { Name = "Bamboo Rod", Price = 0, Luck = 0, PerfectBonus = 0, MythicMult = 1 },
-	Wooden = { Name = "Wooden Rod", Price = 150, Luck = 10, PerfectBonus = 0, MythicMult = 1 },
-	Steel = { Name = "Steel Rod", Price = 600, Luck = 20, PerfectBonus = 10, MythicMult = 1 },
-	Golden = { Name = "Golden Rod", Price = 2000, Luck = 35, PerfectBonus = 20, MythicMult = 1 },
-	Dragon = { Name = "Dragon Rod", Price = 6000, Luck = 50, PerfectBonus = 30, MythicMult = 2 },
-}
-GameConfig.RodOrder = { "Bamboo", "Wooden", "Steel", "Golden", "Dragon" }
 
--- ---------------------------------------------------------------------------
--- Baits: one active at a time; buying is a permanent passive luck upgrade.
--- ---------------------------------------------------------------------------
-GameConfig.Baits = {
-	Bread = { Name = "Bread", Price = 0, Luck = 0 },
-	Worm = { Name = "Worm Bait", Price = 100, Luck = 5 },
-	Shiny = { Name = "Shiny Lure", Price = 500, Luck = 10 },
-	Dragon = { Name = "Dragon Bait", Price = 1500, Luck = 15 },
-}
-GameConfig.BaitOrder = { "Bread", "Worm", "Shiny", "Dragon" }
-
--- ---------------------------------------------------------------------------
--- Tanks: players start with 3 slots, max 12. Prices are sequential per slot.
--- ---------------------------------------------------------------------------
-GameConfig.StartTankSlots = 3
-GameConfig.MaxTankSlots = 12
-GameConfig.TankSlotPrices = { 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200 }
-
--- ---------------------------------------------------------------------------
--- Rebirth: cash resets for a permanent additive +50% income multiplier.
--- ---------------------------------------------------------------------------
-GameConfig.RebirthCost = 25000
-GameConfig.RebirthMax = 5
-GameConfig.RebirthBonusPer = 0.5
-
--- ---------------------------------------------------------------------------
--- Mutations: rolled independently at catch time. Rainbow beats Golden.
--- ---------------------------------------------------------------------------
-GameConfig.MutationRates = { Golden = 0.05, Rainbow = 0.01 }
-GameConfig.MutationMultipliers = { Golden = 2, Rainbow = 4 }
-
--- ---------------------------------------------------------------------------
--- Steal + lock.
--- ---------------------------------------------------------------------------
-GameConfig.StealHoldSeconds = 3
-GameConfig.StealCancelRadius = 12 -- owner this close to the tank cancels the channel
-GameConfig.LockDuration = 300 -- 5 minutes
-GameConfig.LockCooldown = 600 -- 10 minutes
-
--- ---------------------------------------------------------------------------
--- Lake monster event.
--- ---------------------------------------------------------------------------
-GameConfig.MonsterIntervalMin = 240 -- 4 minutes
-GameConfig.MonsterIntervalMax = 360 -- 6 minutes
-GameConfig.MonsterFirstDelay = 90 -- first wave comes early so new players see it
-GameConfig.MonsterWarningSeconds = 15
-GameConfig.MonsterDuration = 30
-GameConfig.MonsterRaidChance = 0.25
-GameConfig.MonsterGuardRadius = 15 -- owner this close to their base guards it
-GameConfig.MonsterReelDeadline = 10
-GameConfig.TangleSeconds = 10
-GameConfig.BlessingLuck = 10 -- Calm Water Blessing after the event ends
-GameConfig.BlessingDuration = 60
-
--- ---------------------------------------------------------------------------
--- Reel minigame.
--- ---------------------------------------------------------------------------
-GameConfig.ReelPointsToLand = 3
-GameConfig.ReelMissStreakToEscape = 3
-GameConfig.PerfectLuckBonus = 5 -- each Perfect hit: +5% tier-bump chance on landing
-GameConfig.ReelTimeoutSeconds = 30
-GameConfig.ReelNeedleSpeeds = { Common = 1.0, Rare = 1.3, Epic = 1.6, Legendary = 2.0, Mythic = 2.6 }
-GameConfig.ReelMissSpeedUp = 1.1 -- needle gets 10% faster after each Miss
-
--- ---------------------------------------------------------------------------
--- Economy.
--- ---------------------------------------------------------------------------
-GameConfig.OverflowSellMultiplier = 100 -- tank-full catch sells for $/s x 100
-GameConfig.IncomeTickSeconds = 1
-GameConfig.AutosaveSeconds = 60
-GameConfig.CollectionBonus = 2000 -- catching all 12 fish
-GameConfig.OfflineEarningsCap = 5000
-GameConfig.OfflineEarningsRate = 0.5 -- 50% of income while away
-
--- ---------------------------------------------------------------------------
--- Daily quests (reset every session).
--- ---------------------------------------------------------------------------
-GameConfig.Quests = {
-	{ Id = "catch5", Name = "Catch 5 fish", Target = 5, Reward = 150 },
-	{ Id = "earn1000", Name = "Earn $1,000 total", Target = 1000, Reward = 300 },
-	{ Id = "rare1", Name = "Catch a Rare or better", Target = 1, Reward = 500 },
+GameConfig.RODS = {
+	{ id = "bamboo", name = "Bamboo Rod", price = 0, luck = 0, perfectBonus = 0, mythicBoost = 1 },
+	{ id = "wooden", name = "Wooden Rod", price = 150, luck = 10, perfectBonus = 0, mythicBoost = 1 },
+	{ id = "steel", name = "Steel Rod", price = 600, luck = 20, perfectBonus = 0.10, mythicBoost = 1 },
+	{ id = "golden", name = "Golden Rod", price = 2000, luck = 35, perfectBonus = 0.20, mythicBoost = 1 },
+	{ id = "dragon", name = "Dragon Rod", price = 6000, luck = 50, perfectBonus = 0.30, mythicBoost = 2 },
 }
 
 -- ---------------------------------------------------------------------------
--- Daily rewards (claim once per day, escalating).
+-- Baits (one active; buying is a permanent passive luck bonus)
 -- ---------------------------------------------------------------------------
-GameConfig.DailyRewards = { 100, 200, 350, 500, 750, 1000, 1500 }
+
+GameConfig.BAITS = {
+	{ id = "bread", name = "Bread", price = 0, luck = 0 },
+	{ id = "worm", name = "Worm Bait", price = 100, luck = 5 },
+	{ id = "shiny", name = "Shiny Lure", price = 500, luck = 10 },
+	{ id = "dragonbait", name = "Dragon Bait", price = 1500, luck = 15 },
+}
+
+GameConfig.MAX_LUCK_PERCENT = 80
 
 -- ---------------------------------------------------------------------------
--- Base plots along the shore (10 plots, one per player, assigned on join).
+-- Tank slots: start with 3, buy up to 12. Prices in buy order.
 -- ---------------------------------------------------------------------------
-GameConfig.BasePlots = {}
-for i = 1, 10 do
-	GameConfig.BasePlots[i] = Vector3.new(-153 + (i - 1) * 34, 0, 48)
-end
 
--- Tank anchors inside a plot: 3 rows of 4, local to the plot center.
--- Row-major, front row first (z=-8 is nearest the entrance): the first
--- tanks fill the row every visitor sees, and a base with 5 tanks already
--- shows two rows. Columns leave a 4.4-stud center aisle (x -2.2..+2.2)
--- between the inner pair so the player and the shadow thief can walk from
--- the entrance to the back row; rows are 8 apart so the 2.4-stud aisles
--- between the 5.6-stud display tables are walkable.
-GameConfig.TankAnchors = {}
-for _, rowZ in ipairs({ -8, 0, 8 }) do
-	for _, colX in ipairs({ -11.5, -5, 5, 11.5 }) do
-		table.insert(GameConfig.TankAnchors, Vector3.new(colX, 0, rowZ))
+GameConfig.STARTING_TANK_SLOTS = 3
+GameConfig.MAX_TANK_SLOTS = 12
+GameConfig.TANK_SLOT_PRICES = { 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200 }
+
+-- ---------------------------------------------------------------------------
+-- Fishing spots and their catch tables (Bamboo rod + Bread bait baseline).
+-- Each row is a percentage chance per rarity tier.
+-- ---------------------------------------------------------------------------
+
+GameConfig.SPOTS = {
+	shallow = {
+		name = "Shallow Shore",
+		price = 0,
+		position = Vector3.new(0, 1, 14),
+		odds = { Common = 60, Rare = 25, Epic = 10, Legendary = 4, Mythic = 1 },
+	},
+	deep = {
+		name = "Deep Dock",
+		price = 500,
+		position = Vector3.new(0, 1, -28),
+		odds = { Common = 45, Rare = 30, Epic = 17, Legendary = 6, Mythic = 2 },
+	},
+	abyss = {
+		name = "Abyss Point",
+		price = 2500,
+		position = Vector3.new(-62, 1, -52),
+		odds = { Common = 30, Rare = 30, Epic = 25, Legendary = 11, Mythic = 4 },
+	},
+	royal = {
+		name = "Royal Pond",
+		price = 0, -- unlocked by the first rebirth, not by cash
+		requiresRebirth = true,
+		position = Vector3.new(62, 1, -58),
+		odds = { Common = 15, Rare = 25, Epic = 30, Legendary = 20, Mythic = 10 },
+	},
+}
+
+GameConfig.SPOT_ORDER = { "shallow", "deep", "abyss", "royal" }
+
+-- ---------------------------------------------------------------------------
+-- Mutations (rolled independently on every catch; Rainbow beats Golden)
+-- ---------------------------------------------------------------------------
+
+GameConfig.GOLDEN_CHANCE_PERCENT = 5
+GameConfig.GOLDEN_INCOME_MULTIPLIER = 2
+GameConfig.RAINBOW_CHANCE_PERCENT = 1
+GameConfig.RAINBOW_INCOME_MULTIPLIER = 4
+
+-- ---------------------------------------------------------------------------
+-- Reel minigame
+-- ---------------------------------------------------------------------------
+
+GameConfig.REEL_POINTS_TO_CATCH = 3
+GameConfig.REEL_MISSES_TO_ESCAPE = 3
+GameConfig.REEL_PERFECT_POINTS = 2
+GameConfig.REEL_GOOD_POINTS = 1
+GameConfig.REEL_PERFECT_LUCK_BONUS = 5 -- +5% luck on this catch per Perfect hit
+GameConfig.CAST_WAIT_MIN_SECONDS = 2
+GameConfig.CAST_WAIT_MAX_SECONDS = 5
+
+-- ---------------------------------------------------------------------------
+-- Stealing and base lock
+-- ---------------------------------------------------------------------------
+
+GameConfig.STEAL_HOLD_SECONDS = 3
+GameConfig.STEAL_OWNER_CANCEL_RADIUS = 12 -- owner this close cancels the steal
+GameConfig.LOCK_DURATION_SECONDS = 300 -- 5 minutes
+GameConfig.LOCK_COOLDOWN_SECONDS = 600 -- 10 minutes
+
+-- ---------------------------------------------------------------------------
+-- Lake monster event
+-- ---------------------------------------------------------------------------
+
+GameConfig.MONSTER_INTERVAL_MIN_SECONDS = 240 -- 4 minutes
+GameConfig.MONSTER_INTERVAL_MAX_SECONDS = 360 -- 6 minutes
+GameConfig.MONSTER_FIRST_DELAY_SECONDS = 90 -- first event 90s after server start
+GameConfig.MONSTER_WARNING_SECONDS = 15
+GameConfig.MONSTER_DURATION_SECONDS = 30
+GameConfig.MONSTER_REEL_LIMIT_SECONDS = 10 -- reel must finish in 10s during the event
+GameConfig.MONSTER_TANGLE_SECONDS = 10 -- rod tangled this long if the catch escapes
+GameConfig.MONSTER_RAID_CHANCE_PERCENT = 25 -- per unlocked tank
+GameConfig.MONSTER_GUARD_RADIUS = 15 -- owner this close to base guards the tanks
+GameConfig.BLESSING_DURATION_SECONDS = 60
+GameConfig.BLESSING_LUCK_BONUS = 10
+
+-- ---------------------------------------------------------------------------
+-- Daily quests (reset every new session)
+-- ---------------------------------------------------------------------------
+
+GameConfig.QUESTS = {
+	{ id = "catch5", name = "Catch 5 fish", goal = 5, reward = 150, kind = "catches" },
+	{ id = "earn1000", name = "Earn $1,000 total", goal = 1000, reward = 300, kind = "earned" },
+	{ id = "rare1", name = "Catch a Rare or better", goal = 1, reward = 500, kind = "rareCatches" },
+}
+
+-- ---------------------------------------------------------------------------
+-- Daily rewards (7-day streak) and offline earnings
+-- ---------------------------------------------------------------------------
+
+GameConfig.DAILY_REWARDS = { 100, 200, 350, 500, 750, 1000, 1500 }
+GameConfig.OFFLINE_EARNINGS_RATE = 0.5 -- 50% of normal income while away
+GameConfig.OFFLINE_EARNINGS_CAP = 5000
+GameConfig.OFFLINE_EARNINGS_MAX_HOURS = 12
+
+-- ---------------------------------------------------------------------------
+-- World layout (studs). WorldBuilder reads these positions.
+-- ---------------------------------------------------------------------------
+
+GameConfig.WORLD = {
+	lakeCenter = Vector3.new(0, -1, -40),
+	lakeSize = Vector3.new(220, 2, 180),
+	shoreCenter = Vector3.new(0, -2, 62),
+	shoreSize = Vector3.new(220, 2, 90),
+	spawnPosition = Vector3.new(0, 3, 12),
+	-- Eight base plots along the shore, x from -84 to +84.
+	basePlots = {
+		Vector3.new(-84, 0, 38),
+		Vector3.new(-60, 0, 38),
+		Vector3.new(-36, 0, 38),
+		Vector3.new(-12, 0, 38),
+		Vector3.new(12, 0, 38),
+		Vector3.new(36, 0, 38),
+		Vector3.new(60, 0, 38),
+		Vector3.new(84, 0, 38),
+	},
+	monsterPosition = Vector3.new(0, -4, -70),
+	questBoardPosition = Vector3.new(-6, 0, 20),
+	leaderboardPosition = Vector3.new(6, 0, 20),
+}
+
+-- ---------------------------------------------------------------------------
+-- Lookups
+-- ---------------------------------------------------------------------------
+
+function GameConfig.GetRodById(rodId)
+	for _, rod in ipairs(GameConfig.RODS) do
+		if rod.id == rodId then
+			return rod
+		end
 	end
+	return GameConfig.RODS[1]
 end
 
-GameConfig.SpawnPosition = Vector3.new(0, 2, 18)
+function GameConfig.GetBaitById(baitId)
+	for _, bait in ipairs(GameConfig.BAITS) do
+		if bait.id == baitId then
+			return bait
+		end
+	end
+	return GameConfig.BAITS[1]
+end
+
+function GameConfig.GetSpotById(spotId)
+	return GameConfig.SPOTS[spotId] or GameConfig.SPOTS.shallow
+end
+
+function GameConfig.GetQuestById(questId)
+	for _, quest in ipairs(GameConfig.QUESTS) do
+		if quest.id == questId then
+			return quest
+		end
+	end
+	return nil
+end
 
 return GameConfig

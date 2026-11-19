@@ -1,61 +1,74 @@
--- RebirthService: trade $25,000 cash for a permanent +50% income multiplier
--- (additive, max 5 rebirths) and access to the Royal Pond. Cash, rod, bait and
--- bought spots reset; fish, collection, tank slots and the multiplier stay.
--- Functions: CanRebirth, DoRebirth, GetRebirthMultiplier.
+-- RebirthService — the prestige reset. At $25,000 cash a player can
+-- rebirth: cash, rod, bait and bought spots reset, but every fish, the
+-- collection, the tank slots and the rebirth multiplier stay. Each
+-- rebirth adds +50% income (additive, up to x3.5 at 5 rebirths) and the
+-- first one opens the Royal Pond, the best fishing spot in the game.
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local GameConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
-local DataService = require(script.Parent:WaitForChild("DataService"))
+local GameConfig = require(game:GetService("ReplicatedStorage").Shared.GameConfig)
 
 local RebirthService = {}
 
-local function GetRemote(name)
-	return ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild(name)
+local dataService = nil
+local economyService = nil
+local rodToolService = nil
+local notifyEvent = nil
+
+function RebirthService.Init(deps)
+	dataService = deps.DataService
+	economyService = deps.EconomyService
+	rodToolService = deps.RodToolService
+	notifyEvent = deps.Notify
 end
 
--- Returns true plus a reason string when rebirth is NOT possible.
 function RebirthService.CanRebirth(player)
-	local data = DataService.GetData(player)
+	local data = dataService.GetData(player)
 	if not data then
-		return false, "No data."
+		return false
 	end
-	if data.Rebirths >= GameConfig.RebirthMax then
-		return false, "Max rebirths reached (5)."
+	if data.rebirths >= GameConfig.MAX_REBIRTHS then
+		return false
 	end
-	if data.Cash < GameConfig.RebirthCost then
-		return false, "Need $25,000 cash."
-	end
-	return true, ""
+	return data.cash >= GameConfig.REBIRTH_CASH_REQUIRED
 end
 
 function RebirthService.GetRebirthMultiplier(player)
-	return DataService.GetRebirthMultiplier(player)
+	local data = dataService.GetData(player)
+	if not data then
+		return 1
+	end
+	return 1 + (data.rebirths * GameConfig.REBIRTH_MULTIPLIER_PER_LEVEL)
 end
 
--- Performs the rebirth: resets cash/rod/bait/spots, keeps fish and slots.
 function RebirthService.DoRebirth(player)
-	local can, reason = RebirthService.CanRebirth(player)
-	local data = DataService.GetData(player)
-	if not can or not data then
-		GetRemote("RebirthResult"):FireClient(player, { Success = false, Message = reason })
-		return
+	if not RebirthService.CanRebirth(player) then
+		if notifyEvent then
+			notifyEvent:FireClient(player, "You need $25,000 cash to rebirth.")
+		end
+		return false
 	end
-	data.Cash = 0
-	data.Rod = "Bamboo"
-	data.Bait = "Bread"
-	data.Spots.Deep = false
-	data.Spots.Abyss = false
-	data.Spots.Royal = true -- Royal Pond opens with the first rebirth
-	data.Rebirths = data.Rebirths + 1
-	data.BlessingUntil = 0
-	data.TangledUntil = 0
-	DataService.BroadcastState(player)
-	GetRemote("RebirthResult"):FireClient(player, {
-		Success = true,
-		Rebirths = data.Rebirths,
-		Multiplier = DataService.GetRebirthMultiplier(player),
-	})
+	local data = dataService.GetData(player)
+
+	-- Reset the grind, keep the collection.
+	data.cash = 0
+	data.rod = "bamboo"
+	data.bait = "bread"
+	data.spots = { deep = false, abyss = false }
+	data.rebirths += 1
+
+	if rodToolService then
+		rodToolService.GiveRodToPlayer(player)
+	end
+
+	local multiplier = RebirthService.GetRebirthMultiplier(player)
+	if notifyEvent then
+		local message = "REBIRTH! Income multiplier is now x" .. string.format("%.1f", multiplier) .. "."
+		if data.rebirths == 1 then
+			message = message .. " The Royal Pond is now open!"
+		end
+		notifyEvent:FireClient(player, message)
+	end
+	economyService.PushState(player)
+	return true
 end
 
 return RebirthService

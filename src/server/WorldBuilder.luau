@@ -1,17 +1,19 @@
--- WorldBuilder: builds the entire 3D sunset lake world from parts at server start.
--- Rojo-first: no Studio-saved place, everything here is code, so the world is
--- reproducible from the repository alone. One call: WorldBuilder.BuildWorld().
+-- WorldBuilder — builds the whole 3D lake world out of Parts at server
+-- start: the lake, the shore, the wooden dock with lanterns, the three
+-- fishing spots plus the Royal Pond, the eight base plots, trees, rocks,
+-- a boat, and the giant lake monster (hidden until its event). The
+-- sunset lighting is set here too. Everything is anchored and built
+-- before the first player spawns, so nobody falls through the world.
 
-local GameConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("GameConfig"))
+local GameConfig = require(game:GetService("ReplicatedStorage").Shared.GameConfig)
 
 local WorldBuilder = {}
 
-local monsterParts = {}
-local lakeParts = {}
+local monsterModel = nil
+local leaderboardSurface = nil
 
--- Creates one anchored part with the given properties.
-local function MakePart(parent, name, className, size, position, color, material)
-	local part = Instance.new(className or "Part")
+local function makePart(name, size, position, color, material)
+	local part = Instance.new("Part")
 	part.Name = name
 	part.Size = size
 	part.Position = position
@@ -19,552 +21,266 @@ local function MakePart(parent, name, className, size, position, color, material
 	part.Material = material or Enum.Material.SmoothPlastic
 	part.Anchored = true
 	part.CanCollide = true
-	part.Parent = parent
+	part.Parent = workspace
 	return part
 end
 
--- A wooden plank: warm brown, slightly varied so the pier reads as planks.
-local function MakePlank(parent, name, size, position, rotationY)
-	local part = MakePart(
-		parent,
-		name,
-		"Part",
-		size,
-		position,
-		Color3.fromRGB(165, 120, 70),
-		Enum.Material.WoodPlanks
-	)
-	if rotationY then
-		part.CFrame = CFrame.new(position) * CFrame.Angles(0, rotationY, 0)
-	end
-	return part
-end
-
--- A glowing lantern on a wooden post (warm point light for the sunset mood).
-local function MakeLantern(parent, position)
-	local post = MakePart(parent, "LanternPost", "Part", Vector3.new(0.5, 4, 0.5), position + Vector3.new(0, 2, 0), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
-	local lamp = MakePart(parent, "LanternLamp", "Part", Vector3.new(1, 1.2, 1), position + Vector3.new(0, 4.6, 0), Color3.fromRGB(255, 200, 100), Enum.Material.Neon)
-	lamp.CanCollide = false
-	local light = Instance.new("PointLight")
-	light.Color = Color3.fromRGB(255, 180, 90)
-	light.Brightness = 1.2
-	light.Range = 14
-	light.Parent = lamp
-	post.CanCollide = false
-	return lamp
-end
-
--- A simple colorful tree: brown trunk + 2-3 bright foliage spheres.
-local function MakeTree(parent, position, scale, foliageColor)
-	local tree = Instance.new("Model")
-	tree.Name = "Tree"
-	tree.Parent = parent
-	local trunk = MakePart(tree, "Trunk", "Part", Vector3.new(1.2 * scale, 5 * scale, 1.2 * scale), position + Vector3.new(0, 2.5 * scale, 0), Color3.fromRGB(120, 80, 45), Enum.Material.Wood)
-	trunk.CanCollide = false
-	local leaf1 = MakePart(tree, "Leaves", "Part", Vector3.new(5 * scale, 4 * scale, 5 * scale), position + Vector3.new(0, 6.5 * scale, 0), foliageColor, Enum.Material.SmoothPlastic)
-	leaf1.Shape = Enum.PartType.Ball
-	leaf1.CanCollide = false
-	local leaf2 = MakePart(tree, "LeavesTop", "Part", Vector3.new(3.5 * scale, 3 * scale, 3.5 * scale), position + Vector3.new(0.8 * scale, 9 * scale, 0), foliageColor, Enum.Material.SmoothPlastic)
-	leaf2.Shape = Enum.PartType.Ball
-	leaf2.CanCollide = false
-	return tree
-end
-
--- A grey boulder near the shore.
-local function MakeRock(parent, position, scale)
-	local rock = MakePart(parent, "Rock", "Part", Vector3.new(2.5 * scale, 1.8 * scale, 2.2 * scale), position, Color3.fromRGB(140, 140, 150), Enum.Material.Slate)
-	rock.Shape = Enum.PartType.Ball
-	return rock
-end
-
--- Attaches a sign label ON a board's face (SurfaceGui), so the text reads
--- as painted on the board — like the top-1 game's ROT RANCH sign — instead
--- of floating in the air. The old BillboardGui plane sat at the board's
--- center (inside the 0.3-thick board) with AlwaysOnTop, so the text
--- rendered through everything and looked detached from the board. A
--- SurfaceGui lives on the face itself: it is occluded like the board,
--- readable only from the front, and never floats. `face` is the board
--- face the text goes on. ROBLOX GOTCHA (fix 12): Front is -Z (the
--- LookVector direction), Back is +Z — the opposite of the naive reading.
--- Spot signs face +Z (Back) because players approach them from the south;
--- the base sign faces -Z (Front) because the lake is north of the plots.
-local function AttachSignLabel(board, title, subtitle, titleColor, face)
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = "SignLabel"
-	gui.Face = face or Enum.NormalId.Back
-	gui.PixelsPerStud = 50
-	gui.AlwaysOnTop = false
-	gui.Parent = board
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Name = "Title"
-	titleLabel.Size = UDim2.new(1, 0, 0.55, 0)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = title
-	titleLabel.TextColor3 = titleColor or Color3.fromRGB(255, 230, 170)
-	titleLabel.TextSize = 30
-	titleLabel.Font = Enum.Font.GothamBold
-	titleLabel.TextScaled = true
-	titleLabel.TextWrapped = true
-	titleLabel.Parent = gui
-	local subLabel = Instance.new("TextLabel")
-	subLabel.Name = "Subtitle"
-	subLabel.Position = UDim2.new(0, 0, 0.55, 0)
-	subLabel.Size = UDim2.new(1, 0, 0.45, 0)
-	subLabel.BackgroundTransparency = 1
-	subLabel.Text = subtitle or ""
-	subLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	subLabel.TextSize = 20
-	subLabel.Font = Enum.Font.GothamBold
-	subLabel.TextScaled = true
-	subLabel.TextWrapped = true
-	subLabel.Parent = gui
-end
-
--- A wooden sign post with a board whose text is painted on its face.
--- The board is BIG (7 x 3.6 studs): a SurfaceGui shrinks with distance
--- like a real board, so a 4.4-stud board was unreadable at normal play
--- distance.
-local function MakeSign(parent, position, title, subtitle, titleColor, face)
-	local post = MakePart(parent, "SignPost", "Part", Vector3.new(0.6, 4.4, 0.6), position + Vector3.new(0, 2.2, 0), Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
-	local board = MakePart(parent, "SignBoard", "Part", Vector3.new(7, 3.6, 0.3), position + Vector3.new(0, 5.2, 0), Color3.fromRGB(70, 45, 25), Enum.Material.WoodPlanks)
-	AttachSignLabel(board, title, subtitle, titleColor, face)
-	post.CanCollide = false
-	board.CanCollide = false
-	return board
-end
-
--- Builds the wooden pier from the shore out into the lake, with lanterns.
-local function BuildPier(world)
-	local pier = Instance.new("Folder")
-	pier.Name = "Pier"
-	pier.Parent = world
-	-- Planks from z = 28 (shore) to z = -66 (deep water), 6 studs wide.
-	for z = 28, -66, -4 do
-		MakePlank(pier, "PierPlank", Vector3.new(6, 0.6, 3.8), Vector3.new(0, 0.7, z))
-	end
-	-- Side rails.
-	MakePart(pier, "RailLeft", "Part", Vector3.new(0.4, 1, 96), Vector3.new(-3, 1.5, -19), Color3.fromRGB(140, 100, 60), Enum.Material.Wood)
-	MakePart(pier, "RailRight", "Part", Vector3.new(0.4, 1, 96), Vector3.new(3, 1.5, -19), Color3.fromRGB(140, 100, 60), Enum.Material.Wood)
-	-- Support posts under the pier, down to the lakebed.
-	for z = 24, -64, -16 do
-		MakePart(pier, "PierPost", "Part", Vector3.new(0.8, 4.5, 0.8), Vector3.new(-2.4, -1.25, z), Color3.fromRGB(100, 70, 40), Enum.Material.Wood)
-		MakePart(pier, "PierPost", "Part", Vector3.new(0.8, 4.5, 0.8), Vector3.new(2.4, -1.25, z), Color3.fromRGB(100, 70, 40), Enum.Material.Wood)
-	end
-	-- Lanterns along the pier.
-	for _, z in ipairs({ 24, 0, -24, -48, -64 }) do
-		MakeLantern(pier, Vector3.new(-3.4, 1, z))
-		MakeLantern(pier, Vector3.new(3.4, 1, z))
-	end
-	-- Zone marker strips across the pier (Neon, no light, no collision):
-	-- cyan where the Shallow Shore zone starts, blue where the Deep Dock
-	-- zone starts. Each spot reads as its own color from across the lake.
-	local shallowStrip = MakePart(pier, "ZoneStripShallow", "Part", Vector3.new(6.4, 0.2, 0.4), Vector3.new(0, 1.05, 24), Color3.fromRGB(80, 255, 220), Enum.Material.Neon)
-	shallowStrip.CanCollide = false
-	local deepStrip = MakePart(pier, "ZoneStripDeep", "Part", Vector3.new(6.4, 0.2, 0.4), Vector3.new(0, 1.05, -64), Color3.fromRGB(60, 180, 255), Enum.Material.Neon)
-	deepStrip.CanCollide = false
-	-- Wide platform at the pier end (Deep Dock).
-	for x = -4, 4, 4 do
-		MakePlank(pier, "DockPlank", Vector3.new(4, 0.6, 10), Vector3.new(x, 0.7, -68))
-	end
-	-- Blue Neon edge on the dock's far side.
-	local dockEdge = MakePart(pier, "DockEdge", "Part", Vector3.new(12, 0.3, 0.4), Vector3.new(0, 1.1, -73), Color3.fromRGB(60, 180, 255), Enum.Material.Neon)
-	dockEdge.CanCollide = false
-end
-
--- Builds the diagonal wooden bridge from the pier to Abyss Island.
-local function BuildBridge(world)
-	local bridge = Instance.new("Folder")
-	bridge.Name = "Bridge"
-	bridge.Parent = world
-	local startPos = Vector3.new(-3, 0.7, -44)
-	local endPos = Vector3.new(-66, 0.7, -90)
-	local steps = 16
-	for i = 0, steps do
-		local t = i / steps
-		local pos = startPos:Lerp(endPos, t)
-		MakePlank(bridge, "BridgePlank", Vector3.new(4, 0.5, 4.5), pos, math.rad(-45))
-	end
-	MakeLantern(bridge, Vector3.new(-24, 1, -58))
-	MakeLantern(bridge, Vector3.new(-48, 1, -78))
-end
-
--- A small round island with one tree; kind = "Abyss" (dark rock) or "Royal" (glowing pond).
-local function BuildIsland(world, center, kind)
-	local island = Instance.new("Folder")
-	island.Name = kind .. "Island"
-	island.Parent = world
-	-- Island base: a sand cylinder reaching down to the lakebed (-3.5) so
-	-- the island stands IN the lake instead of floating above it.
-	local sand = MakePart(island, "IslandSand", "Part", Vector3.new(4.5, 26, 26), center + Vector3.new(0, -1.3, 0), Color3.fromRGB(230, 210, 150), Enum.Material.Sand)
-	sand.Shape = Enum.PartType.Cylinder
-	sand.CFrame = CFrame.new(center + Vector3.new(0, -1.3, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	-- A glowing ring around the island's base in the zone's accent color
-	-- (purple for the Abyss, gold for the Royal Pond): 27 wide, so it
-	-- sticks out 0.5 studs past the 26-wide sand and reads from the pier.
-	local ringColor = kind == "Abyss" and Color3.fromRGB(170, 80, 255) or Color3.fromRGB(255, 214, 90)
-	local ring = MakePart(island, "IslandRing", "Part", Vector3.new(0.3, 27, 27), center + Vector3.new(0, 0.8, 0), ringColor, Enum.Material.Neon)
-	ring.Shape = Enum.PartType.Cylinder
-	ring.CFrame = CFrame.new(center + Vector3.new(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	ring.CanCollide = false
-	if kind == "Abyss" then
-		MakeRock(island, center + Vector3.new(-6, 1, -4), 2.2)
-		MakeRock(island, center + Vector3.new(7, 1, 5), 1.6)
-		MakeTree(island, center + Vector3.new(5, 1, -6), 1.1, Color3.fromRGB(40, 120, 90))
-		MakeSign(island, center + Vector3.new(0, 1, 6), "ABYSS POINT", "Deep water. Rare fish.", Color3.fromRGB(120, 180, 255))
-	else
-		-- Royal Pond: a glowing golden pool in the middle of the island.
-		local pond = MakePart(island, "RoyalPondWater", "Part", Vector3.new(0.6, 12, 12), center + Vector3.new(0, 1.1, 0), Color3.fromRGB(255, 214, 90), Enum.Material.Neon)
-		pond.Shape = Enum.PartType.Cylinder
-		pond.CFrame = CFrame.new(center + Vector3.new(0, 1.1, 0)) * CFrame.Angles(0, 0, math.rad(90))
-		pond.CanCollide = false
-		local glow = Instance.new("PointLight")
-		glow.Color = Color3.fromRGB(255, 210, 100)
-		glow.Brightness = 2
-		glow.Range = 22
-		glow.Parent = pond
-		MakeTree(island, center + Vector3.new(-7, 1, -5), 1.2, Color3.fromRGB(255, 170, 220))
-		MakeTree(island, center + Vector3.new(7, 1, 6), 1.0, Color3.fromRGB(255, 200, 120))
-		MakeSign(island, center + Vector3.new(0, 1, 8), "ROYAL POND", "Rebirth anglers only.", Color3.fromRGB(255, 220, 100))
-	end
-	return island
-end
-
--- Glowing buoys in the lake, one saturated accent color per spot (Neon,
--- no PointLight, so they are cheap): cyan Shallow, bright-blue Deep,
--- purple Abyss, gold Royal. Positions are hand-checked: clear of the
--- pier (x -3..3), the dock (x -6..6, z -73..-63), the bridge, and the
--- 26-wide islands (Abyss/Royal buoys sit at radius 16, outside the
--- island's radius 13).
-local BuoyZones = {
-	{ Color = Color3.fromRGB(80, 255, 220), Positions = { Vector3.new(14, 0.6, 22), Vector3.new(-6, 0.6, 22), Vector3.new(5, 0.6, 12) } },
-	{ Color = Color3.fromRGB(60, 180, 255), Positions = { Vector3.new(-10, 0.6, -62), Vector3.new(10, 0.6, -62), Vector3.new(-7, 0.6, -72) } },
-	{ Color = Color3.fromRGB(170, 80, 255), Positions = { Vector3.new(-54, 0.6, -95), Vector3.new(-86, 0.6, -95), Vector3.new(-70, 0.6, -79) } },
-	{ Color = Color3.fromRGB(255, 214, 90), Positions = { Vector3.new(54, 0.6, -95), Vector3.new(86, 0.6, -95), Vector3.new(70, 0.6, -79) } },
-}
-
-local function BuildBuoys(world)
-	local buoys = Instance.new("Folder")
-	buoys.Name = "Buoys"
-	buoys.Parent = world
-	for _, zone in ipairs(BuoyZones) do
-		for _, pos in ipairs(zone.Positions) do
-			local buoy = MakePart(buoys, "Buoy", "Part", Vector3.new(1.6, 1.6, 1.6), pos, zone.Color, Enum.Material.Neon)
-			buoy.Shape = Enum.PartType.Ball
-			buoy.CanCollide = false
-		end
-	end
-end
-
--- One accent color per base (10 plots): the roof, the header beam and the
--- display-table tops all wear it, so each base reads as its own colorful
--- house from across the lake.
-local PlotColors = {
-	Color3.fromRGB(220, 60, 60), -- red
-	Color3.fromRGB(255, 140, 40), -- orange
-	Color3.fromRGB(255, 210, 60), -- yellow
-	Color3.fromRGB(80, 200, 80), -- green
-	Color3.fromRGB(60, 200, 180), -- teal
-	Color3.fromRGB(80, 140, 255), -- blue
-	Color3.fromRGB(170, 90, 255), -- purple
-	Color3.fromRGB(255, 120, 180), -- pink
-	Color3.fromRGB(170, 220, 60), -- lime
-	Color3.fromRGB(80, 220, 255), -- cyan
-}
-
--- One player base plot: a small open-front house (cream walls, a slanted
--- accent roof, a sign over the entrance) with 3 rows of display tables —
--- the tanks sit ON the tables, not on the floor, so the base reads as a
--- neat display room. The front is open (pillars + header only) so the
--- player, the thief and the camera walk straight in, and the tanks are
--- visible from the lake through the opening. The center aisle (x -2.2..2.2)
--- runs front-to-back between the inner tables; the thief walks down it.
-local function BuildBasePlot(world, index, center)
-	local plot = Instance.new("Folder")
-	plot.Name = "BasePlot" .. index
-	plot.Parent = world
-	local accent = PlotColors[((index - 1) % #PlotColors) + 1]
-	local wallColor = Color3.fromRGB(245, 240, 225)
-	local woodDark = Color3.fromRGB(120, 85, 50)
-	-- Wooden floor (32 x 24: room for 3 rows of tables + walkable aisles).
-	MakePart(plot, "PlotPad", "Part", Vector3.new(32, 0.4, 24), center + Vector3.new(0, 0.2, 0), Color3.fromRGB(170, 130, 85), Enum.Material.WoodPlanks)
-	-- Walls: back + two sides, 7.5 tall, sitting on the floor (top at 0.4).
-	MakePart(plot, "WallBack", "Part", Vector3.new(32, 7.5, 0.4), center + Vector3.new(0, 4.15, 12), wallColor)
-	MakePart(plot, "WallLeft", "Part", Vector3.new(0.4, 7.5, 24), center + Vector3.new(-16, 4.15, 0), wallColor)
-	MakePart(plot, "WallRight", "Part", Vector3.new(0.4, 7.5, 24), center + Vector3.new(16, 4.15, 0), wallColor)
-	-- Front pillars + header beam (accent) over the open entrance.
-	MakePart(plot, "PillarL", "Part", Vector3.new(1, 7.5, 1), center + Vector3.new(-16, 4.15, -12), woodDark, Enum.Material.Wood)
-	MakePart(plot, "PillarR", "Part", Vector3.new(1, 7.5, 1), center + Vector3.new(16, 4.15, -12), woodDark, Enum.Material.Wood)
-	MakePart(plot, "HeaderBeam", "Part", Vector3.new(32, 1.2, 0.8), center + Vector3.new(0, 7.2, -12), accent)
-	-- Slanted roof: two 13-deep slabs at 15 degrees meeting at a ridge
-	-- (y ~11.3), eaves at y ~7.9 just above the wall tops (7.9). Each
-	-- slab's horizontal reach is 13*cos(15) = 12.56, so the roof covers
-	-- the full 24-deep house and overhangs the walls a little on every
-	-- side. Front slab tilts -15 (ridge end up), back slab +15.
-	local roofFront = MakePart(plot, "RoofFront", "Part", Vector3.new(33, 0.3, 13), center + Vector3.new(0, 9.58, -6), accent)
-	roofFront.CFrame = CFrame.new(center + Vector3.new(0, 9.58, -6)) * CFrame.Angles(math.rad(-15), 0, 0)
-	local roofBack = MakePart(plot, "RoofBack", "Part", Vector3.new(33, 0.3, 13), center + Vector3.new(0, 9.58, 6), accent)
-	roofBack.CFrame = CFrame.new(center + Vector3.new(0, 9.58, 6)) * CFrame.Angles(math.rad(15), 0, 0)
-	MakePart(plot, "RoofRidge", "Part", Vector3.new(33, 0.5, 0.5), center + Vector3.new(0, 11.3, 0), accent)
-	-- Owner sign hanging on the header, facing the lake (Front = -Z, the
-	-- lake side; Back would face into the base — fix 12, the old code
-	-- had it backwards). Its bottom (5.65) clears a 5-stud player
-	-- walking in; the name is filled in when a player claims the plot.
-	local signBoard = MakePart(plot, "OwnerSign", "Part", Vector3.new(10, 2.5, 0.3), center + Vector3.new(0, 6.9, -12.6), Color3.fromRGB(70, 45, 25), Enum.Material.WoodPlanks)
-	signBoard.CanCollide = false
-	AttachSignLabel(signBoard, "OPEN BASE", "Your tanks go here", Color3.fromRGB(255, 230, 170), Enum.NormalId.Front)
-	-- Display tables (12): a pedestal + an accent top. The tank glass
-	-- sits on the top (y 1.8) — see TankService.GetTankCenter (+3.75).
-	for i, offset in ipairs(GameConfig.TankAnchors) do
-		MakePart(plot, "TablePedestal" .. i, "Part", Vector3.new(1.5, 1.1, 1.5), center + offset + Vector3.new(0, 0.95, 0), woodDark, Enum.Material.Wood)
-		MakePart(plot, "TableTop" .. i, "Part", Vector3.new(5.6, 0.3, 5.6), center + offset + Vector3.new(0, 1.65, 0), accent)
-	end
-	return plot
-end
-
--- The lake monster's hidden parts: a dark shadow on the deep water, a
--- voxel dorsal fin and a voxel serpent head that rise during the event.
--- They live MID-LAKE (x = 18, z = -45), east of the pier, ~60 studs from
--- the shore — the old spot at z = -80 was 100+ studs from every player,
--- so the 4-stud fin and 1.4-stud eyes were invisible and the event looked
--- like nothing happened (the blessing after it proved it HAD run). Big
--- fin, big head, a red glow light, and the shadow sitting ON the water
--- surface (y = 0.5, above the lake top at 0.3) so the monster is
--- unmissable when it stirs. Fix 12: the plain wedge fin + floating ball
--- eyes are gone — the fin is a stepped voxel fin and the head is a voxel
--- serpent head (neck, snout, jaw, teeth, glowing eyes) facing the shore,
--- matching the voxel fish detail.
-local function BuildMonster(world)
-	local folder = Instance.new("Folder")
-	folder.Name = "LakeMonster"
-	folder.Parent = world
-	local shadow = MakePart(folder, "MonsterShadow", "Part", Vector3.new(36, 0.4, 20), Vector3.new(18, 0.5, -43), Color3.fromRGB(10, 20, 40), Enum.Material.SmoothPlastic)
-	shadow.Shape = Enum.PartType.Ball
-	shadow.Transparency = 1
-	shadow.CanCollide = false
-	-- Voxel dorsal fin: five stepped Neon columns (heights 4/8/12/8/4),
-	-- rooted below the water surface so they rise out of it.
-	local finModel = Instance.new("Model")
-	finModel.Name = "MonsterFin"
-	finModel.Parent = folder
-	local finGreen = Color3.fromRGB(60, 255, 130)
-	local finHeights = { 4, 8, 12, 8, 4 }
-	for i, h in ipairs(finHeights) do
-		local col = MakePart(finModel, "FinColumn" .. i, "Part", Vector3.new(1.8, h, 1.5), Vector3.new(14.4 + (i - 1) * 1.8, h / 2 - 1, -45), finGreen, Enum.Material.Neon)
-		col.Transparency = 1
-		col.CanCollide = false
-	end
-	-- Voxel serpent head at (18, -40), facing the shore (+Z, where the
-	-- players are). Every part overlaps its neighbour (the fix-9 join
-	-- rule) so nothing floats or z-fights.
-	local headModel = Instance.new("Model")
-	headModel.Name = "MonsterHead"
-	headModel.Parent = folder
-	local headGreen = Color3.fromRGB(20, 80, 60)
-	local snoutGreen = Color3.fromRGB(30, 100, 75)
-	local darkGreen = Color3.fromRGB(10, 30, 25)
-	local function HeadPart(name, size, pos, color, material)
-		local part = MakePart(headModel, name, "Part", size, pos, color, material)
-		part.Transparency = 1
-		part.CanCollide = false
-		return part
-	end
-	HeadPart("Neck", Vector3.new(3, 5, 3), Vector3.new(18, 2, -40), headGreen)
-	HeadPart("Head", Vector3.new(5, 3, 5), Vector3.new(18, 5.5, -40), headGreen)
-	HeadPart("Snout", Vector3.new(3, 2, 3), Vector3.new(18, 5.5, -36.5), snoutGreen)
-	HeadPart("Jaw", Vector3.new(3, 1, 2.5), Vector3.new(18, 3.7, -36.5), headGreen)
-	for i, x in ipairs({ 17, 17.7, 18.3, 19 }) do
-		HeadPart("Tooth" .. i, Vector3.new(0.4, 0.7, 0.4), Vector3.new(x, 4.3, -35.3), Color3.fromRGB(240, 240, 230))
-	end
-	for i, x in ipairs({ 16.3, 19.7 }) do
-		HeadPart("EyeSocket" .. i, Vector3.new(1.4, 1.4, 0.3), Vector3.new(x, 6.5, -37.6), darkGreen)
-		HeadPart("Eye" .. i, Vector3.new(1, 1, 0.4), Vector3.new(x, 6.5, -37.4), Color3.fromRGB(255, 220, 60), Enum.Material.Neon)
-		HeadPart("Brow" .. i, Vector3.new(1.4, 0.4, 0.3), Vector3.new(x, 7.1, -37.6), darkGreen)
-	end
-	for i, z in ipairs({ -41.5, -40, -38.5 }) do
-		HeadPart("HeadSpike" .. i, Vector3.new(0.6, 0.8, 0.6), Vector3.new(18, 7.3, z), darkGreen)
-	end
-	-- A red glow disc on the water under the monster: the dark fin on dark
-	-- night water was still invisible in playtests, so the event now has a
-	-- glowing red halo on the surface plus a Neon green fin.
-	local glowDisc = MakePart(folder, "MonsterGlowDisc", "Part", Vector3.new(0.3, 40, 24), Vector3.new(18, 0.6, -43), Color3.fromRGB(255, 60, 40), Enum.Material.Neon)
-	glowDisc.Shape = Enum.PartType.Cylinder
-	-- Cylinder axis is X by default; rotate it flat (axis vertical).
-	glowDisc.CFrame = CFrame.new(Vector3.new(18, 0.6, -43)) * CFrame.Angles(0, 0, math.rad(90))
-	glowDisc.Transparency = 1
-	glowDisc.CanCollide = false
-	local glow = Instance.new("PointLight")
-	glow.Name = "MonsterGlow"
-	glow.Color = Color3.fromRGB(255, 60, 40)
-	glow.Brightness = 5
-	glow.Range = 60
-	glow.Enabled = false
-	glow.Parent = headModel:FindFirstChild("Head")
-	monsterParts = { Shadow = shadow, Fin = finModel, Head = headModel, Glow = glow, GlowDisc = glowDisc }
-end
-
--- A small wooden rowboat floating near the pier.
-local function BuildBoat(world)
-	local boat = Instance.new("Folder")
-	boat.Name = "Rowboat"
-	boat.Parent = world
-	local hull = MakePart(boat, "BoatHull", "Part", Vector3.new(3, 1.2, 7), Vector3.new(14, 0.4, -20), Color3.fromRGB(150, 100, 55), Enum.Material.WoodPlanks)
-	hull.CanCollide = false
-	MakePart(boat, "BoatBench", "Part", Vector3.new(2.6, 0.3, 1), Vector3.new(14, 1, -20), Color3.fromRGB(120, 80, 45), Enum.Material.Wood).CanCollide = false
-	local mast = MakePart(boat, "BoatMast", "Part", Vector3.new(0.3, 4, 0.3), Vector3.new(14, 2.5, -21), Color3.fromRGB(120, 80, 45), Enum.Material.Wood)
-	mast.CanCollide = false
-	MakePart(boat, "BoatFlag", "Part", Vector3.new(1.6, 1, 0.1), Vector3.new(14.8, 4, -21), Color3.fromRGB(255, 80, 80), Enum.Material.SmoothPlastic).CanCollide = false
-end
-
--- The main build: ground, lake, shore, pier, islands, bases, decor, monster.
-function WorldBuilder.BuildWorld()
-	local workspace = game:GetService("Workspace")
-	local world = Instance.new("Folder")
-	world.Name = "BrainrotFishingWorld"
-	world.Parent = workspace
-
-	-- Ground: bright green meadow in four slabs that leave a real basin for
-	-- the lake (x -100..100, z -130..10). The old single slab ran under the
-	-- whole lake, so the "lake" was a 0.3-stud sheet lying on grass.
-	MakePart(world, "GroundSouth", "Part", Vector3.new(360, 2, 140), Vector3.new(0, -1, 80), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
-	MakePart(world, "GroundNorth", "Part", Vector3.new(300, 2, 20), Vector3.new(0, -1, -140), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
-	MakePart(world, "GroundEast", "Part", Vector3.new(50, 2, 140), Vector3.new(125, -1, -60), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
-	MakePart(world, "GroundWest", "Part", Vector3.new(50, 2, 140), Vector3.new(-125, -1, -60), Color3.fromRGB(95, 175, 85), Enum.Material.Grass)
-	-- Lakebed at the bottom of the basin (top at y = -3.5).
-	MakePart(world, "LakeBed", "Part", Vector3.new(200, 1, 140), Vector3.new(0, -4, -60), Color3.fromRGB(190, 175, 130), Enum.Material.Sand)
-	-- Lake: deep, dark water, 3.8 studs thick (surface at y = 0.25).
-	-- Players who walk in wade chest-deep on the lakebed and can jump back
-	-- out (the 3.5-stud ledge is well within jump height).
-	local lake = MakePart(world, "LakeWater", "Part", Vector3.new(200, 3.8, 140), Vector3.new(0, -1.65, -60), Color3.fromRGB(35, 140, 180), Enum.Material.SmoothPlastic)
-	lake.Transparency = 0.18
+local function makeWater()
+	local lake = makePart("Lake", GameConfig.WORLD.lakeSize, GameConfig.WORLD.lakeCenter,
+		Color3.fromRGB(45, 130, 170), Enum.Material.Water)
 	lake.CanCollide = false
-	lakeParts.Lake = lake
-	lakeParts.Patches = {}
-	-- Sandy shore strip where the lake meets the land.
-	MakePart(world, "ShoreSand", "Part", Vector3.new(200, 0.5, 22), Vector3.new(0, 0.1, 21), Color3.fromRGB(235, 215, 160), Enum.Material.Sand)
-	-- Glowing water patches mark each fishing spot's depth — Neon so they
-	-- actually glow, with a light of their own and a tall light beam rising
-	-- from each one. A flat translucent disc was invisible from anywhere
-	-- except right on top of it, which left players with no visible
-	-- "glowing water" to walk to; the beams are visible from anywhere on
-	-- the map and say "fish here" at a glance.
-	for spotId, spot in pairs(GameConfig.Spots) do
-		local patch = MakePart(world, spotId .. "Water", "Part", Vector3.new(0.4, 14, 14), Vector3.new(spot.Position.X, 0.4, spot.Position.Z), spot.WaterColor, Enum.Material.Neon)
-		patch.Shape = Enum.PartType.Cylinder
-		patch.CFrame = CFrame.new(Vector3.new(spot.Position.X, 0.4, spot.Position.Z)) * CFrame.Angles(0, 0, math.rad(90))
-		patch.Transparency = 0.15
-		patch.CanCollide = false
-		lakeParts.Patches[spotId] = patch
-		local patchLight = Instance.new("PointLight")
-		patchLight.Color = spot.WaterColor
-		patchLight.Brightness = 1.5
-		patchLight.Range = 20
-		patchLight.Parent = patch
-		local beam = MakePart(world, spotId .. "Beam", "Part", Vector3.new(1, 44, 1), Vector3.new(spot.Position.X, 22, spot.Position.Z), spot.WaterColor, Enum.Material.Neon)
-		beam.Transparency = 0.65
-		beam.CanCollide = false
+	lake.Transparency = 0.15
+	return lake
+end
+
+local function makeShore()
+	makePart("Shore", GameConfig.WORLD.shoreSize, GameConfig.WORLD.shoreCenter,
+		Color3.fromRGB(200, 180, 130), Enum.Material.Sand)
+	-- A grassy strip where the bases sit.
+	makePart("GrassStrip", Vector3.new(220, 1, 30), Vector3.new(0, -1.2, 38),
+		Color3.fromRGB(110, 160, 80), Enum.Material.Grass)
+end
+
+local function makeDock()
+	-- Main dock: wooden planks from the shore into the lake.
+	for i = 0, 14 do
+		makePart("DockPlank", Vector3.new(6, 0.5, 3), Vector3.new(0, 0.8, 18 - i * 3),
+			Color3.fromRGB(140, 100, 60), Enum.Material.WoodPlanks)
 	end
-
-	BuildPier(world)
-	BuildBridge(world)
-	BuildIsland(world, Vector3.new(-70, 0, -95), "Abyss")
-	BuildIsland(world, Vector3.new(70, 0, -95), "Royal")
-	BuildBuoys(world)
-	BuildBoat(world)
-
-	-- Spawn: right on the pier, rod already in hand.
+	-- Support posts under the dock.
+	for i = 0, 4 do
+		makePart("DockPost", Vector3.new(0.6, 4, 0.6), Vector3.new(-2.5, -1, 15 - i * 9),
+			Color3.fromRGB(110, 80, 45), Enum.Material.Wood)
+		makePart("DockPost", Vector3.new(0.6, 4, 0.6), Vector3.new(2.5, -1, 15 - i * 9),
+			Color3.fromRGB(110, 80, 45), Enum.Material.Wood)
+	end
+	-- Lanterns along the dock: warm light for the sunset mood.
+	for i = 0, 3 do
+		local z = 12 - i * 12
+		local post = makePart("LanternPost", Vector3.new(0.4, 3, 0.4), Vector3.new(3.2, 2.5, z),
+			Color3.fromRGB(90, 70, 40), Enum.Material.Wood)
+		local lamp = makePart("LanternLamp", Vector3.new(0.8, 0.8, 0.8), Vector3.new(3.2, 4.2, z),
+			Color3.fromRGB(255, 200, 100), Enum.Material.Neon)
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 190, 90)
+		light.Range = 12
+		light.Brightness = 2
+		light.Parent = lamp
+	end
+	-- Spawn location on the dock, facing the lake.
 	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "PierSpawn"
+	spawn.Name = "DockSpawn"
 	spawn.Size = Vector3.new(6, 1, 6)
-	spawn.Position = Vector3.new(0, 1.2, 18)
-	spawn.Color = Color3.fromRGB(165, 120, 70)
-	spawn.Material = Enum.Material.WoodPlanks
+	spawn.Position = GameConfig.WORLD.spawnPosition
 	spawn.Anchored = true
-	spawn.Duration = 0
-	spawn.Neutral = true -- no teams in this game: anyone may use this spawn
+	spawn.Color = Color3.fromRGB(140, 100, 60)
+	spawn.Material = Enum.Material.WoodPlanks
+	spawn.Neutral = true
 	spawn.AllowTeamChangeOnTouch = false
-	spawn.Parent = world
+	spawn.Parent = workspace
+end
 
-	-- Spot signs (descriptive text, no prices: the price lives in the Shop,
-	-- and a sign saying "$500" after the player already bought the spot was
-	-- confusing).
-	MakeSign(world, Vector3.new(6, 0, 26), "SHALLOW SHORE", "Free fishing. Start here!", Color3.fromRGB(140, 240, 210))
-	MakeSign(world, Vector3.new(5, 1, -60), "DEEP DOCK", "Deeper water. Rare fish live here.", Color3.fromRGB(120, 190, 255))
-	MakeSign(world, Vector3.new(-65, 0, -90), "ABYSS POINT", "The deep dark. Legends lurk below.", Color3.fromRGB(90, 130, 255))
-	MakeSign(world, Vector3.new(65, 0, -90), "ROYAL POND", "Rebirth to fish here. Mythic 10%!", Color3.fromRGB(255, 214, 90))
+-- A wooden sign board with text on its face. SurfaceGui sits ON the face,
+-- so the board can never occlude its own text (unlike a centred BillboardGui).
+local function makeSignBoard(position, title, lines, width, height)
+	width = width or 7
+	height = height or 3.6
+	local board = makePart("SignBoard", Vector3.new(width, height, 0.3), position,
+		Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
+	local post = makePart("SignPost", Vector3.new(0.5, 2.5, 0.5),
+		position + Vector3.new(0, -height / 2 - 1.2, 0), Color3.fromRGB(100, 70, 40), Enum.Material.Wood)
 
-	-- Quest board + top anglers board at the foot of the pier.
-	MakeSign(world, Vector3.new(-9, 0, 28), "QUEST BOARD", "3 daily quests. Big rewards!", Color3.fromRGB(255, 220, 120))
-	MakeSign(world, Vector3.new(9, 0, 28), "TOP ANGLERS", "Catch rare fish. Climb the lake!", Color3.fromRGB(255, 180, 180))
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "SignText"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 60
+	gui.Parent = board
 
-	-- Base plots along the shore.
-	for i, center in ipairs(GameConfig.BasePlots) do
-		BuildBasePlot(world, i, center)
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(1, 0, 0.3, 0)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextSize = 34
+	titleLabel.TextColor3 = Color3.fromRGB(255, 240, 200)
+	titleLabel.Text = title
+	titleLabel.Parent = gui
+
+	local bodyLabel = Instance.new("TextLabel")
+	bodyLabel.Name = "BoardText"
+	bodyLabel.Size = UDim2.new(1, 0, 0.7, 0)
+	bodyLabel.Position = UDim2.new(0, 0, 0.3, 0)
+	bodyLabel.BackgroundTransparency = 1
+	bodyLabel.Font = Enum.Font.Gotham
+	bodyLabel.TextSize = 24
+	bodyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	bodyLabel.TextWrapped = true
+	bodyLabel.Text = table.concat(lines, "\n")
+	bodyLabel.Parent = gui
+
+	return gui
+end
+
+local function makeSpotMarkers()
+	-- Shallow Shore sign at the dock's shore end.
+	makeSignBoard(Vector3.new(-5, 3.5, 16), "SHALLOW SHORE",
+		{ "Free fishing", "Common fish live here" }, 6, 3)
+	-- Deep Dock sign at the dock's far end.
+	makeSignBoard(Vector3.new(-5, 3.5, -28), "DEEP DOCK",
+		{ "$500 to unlock", "Better odds, deeper fish" }, 6, 3)
+	-- Abyss Point: a small island with a wooden bridge.
+	local island = makePart("AbyssIsland", Vector3.new(16, 2, 16), Vector3.new(-62, -1, -52),
+		Color3.fromRGB(150, 140, 110), Enum.Material.Rock)
+	for i = 0, 9 do
+		makePart("BridgePlank", Vector3.new(2.5, 0.4, 2.5),
+			Vector3.new(-8 - i * 5.5, 0.8, -30 - i * 2.2), Color3.fromRGB(140, 100, 60), Enum.Material.WoodPlanks)
 	end
+	makeSignBoard(Vector3.new(-62, 3.5, -48), "ABYSS POINT",
+		{ "$2,500 to unlock", "Rare fish gather here" }, 6, 3)
+	-- Royal Pond: a small glowing pond on its own island.
+	local royalIsland = makePart("RoyalIsland", Vector3.new(14, 2, 14), Vector3.new(62, -1, -58),
+		Color3.fromRGB(160, 150, 120), Enum.Material.Rock)
+	local pond = makePart("RoyalPondWater", Vector3.new(9, 1, 9), Vector3.new(62, 0.2, -58),
+		Color3.fromRGB(120, 220, 255), Enum.Material.Neon)
+	pond.CanCollide = false
+	local pondLight = Instance.new("PointLight")
+	pondLight.Color = Color3.fromRGB(120, 220, 255)
+	pondLight.Range = 18
+	pondLight.Brightness = 2
+	pondLight.Parent = pond
+	makeSignBoard(Vector3.new(62, 3.5, -52), "ROYAL POND",
+		{ "Rebirth to unlock", "Mythic fish live here" }, 6, 3)
+end
 
-	-- Trees: a colorful mix along the shore and on the meadow. The plots
-	-- are 24 deep (z 36..60), so no tree stands inside a house: the row
-	-- behind the houses is at z 68, the shore row at z 30-35.
+local function makeBasePlots()
+	for _, plot in ipairs(GameConfig.WORLD.basePlots) do
+		-- A low wooden fence around each base plot.
+		local fence = makePart("BaseFence", Vector3.new(24, 1, 0.4), plot + Vector3.new(0, 0.5, -7),
+			Color3.fromRGB(130, 95, 55), Enum.Material.Wood)
+		makePart("BaseFence", Vector3.new(0.4, 1, 14), plot + Vector3.new(-12, 0.5, 0),
+			Color3.fromRGB(130, 95, 55), Enum.Material.Wood)
+		makePart("BaseFence", Vector3.new(0.4, 1, 14), plot + Vector3.new(12, 0.5, 0),
+			Color3.fromRGB(130, 95, 55), Enum.Material.Wood)
+		-- A stone floor under the tanks.
+		makePart("BaseFloor", Vector3.new(24, 0.5, 14), plot + Vector3.new(0, 0.1, 0),
+			Color3.fromRGB(160, 155, 145), Enum.Material.Slate)
+	end
+end
+
+local function makeDecorations()
+	-- Trees on the shore.
 	local treeSpots = {
-		{ Vector3.new(-30, 0, 35), 1.2, Color3.fromRGB(60, 170, 80) },
-		{ Vector3.new(-48, 0, 68), 1.4, Color3.fromRGB(255, 150, 180) },
-		{ Vector3.new(-80, 0, 30), 1.1, Color3.fromRGB(70, 180, 90) },
-		{ Vector3.new(-105, 0, 68), 1.5, Color3.fromRGB(255, 200, 90) },
-		{ Vector3.new(30, 0, 30), 1.3, Color3.fromRGB(60, 170, 80) },
-		{ Vector3.new(52, 0, 68), 1.1, Color3.fromRGB(255, 150, 180) },
-		{ Vector3.new(84, 0, 32), 1.4, Color3.fromRGB(70, 180, 90) },
-		{ Vector3.new(108, 0, 68), 1.2, Color3.fromRGB(255, 200, 90) },
-		{ Vector3.new(-120, 0, -10), 1.5, Color3.fromRGB(60, 170, 80) },
-		{ Vector3.new(120, 0, -12), 1.3, Color3.fromRGB(70, 180, 90) },
-		{ Vector3.new(-60, 0, 85), 1.2, Color3.fromRGB(255, 150, 180) },
-		{ Vector3.new(60, 0, 88), 1.4, Color3.fromRGB(60, 170, 80) },
+		Vector3.new(-40, 0, 70), Vector3.new(-70, 0, 65), Vector3.new(30, 0, 72),
+		Vector3.new(70, 0, 68), Vector3.new(-100, 0, 60), Vector3.new(100, 0, 62),
 	}
-	for _, spec in ipairs(treeSpots) do
-		MakeTree(world, spec[1], spec[2], spec[3])
+	for _, spot in ipairs(treeSpots) do
+		makePart("TreeTrunk", Vector3.new(1.2, 6, 1.2), spot + Vector3.new(0, 3, 0),
+			Color3.fromRGB(110, 80, 45), Enum.Material.Wood)
+		local leaves = makePart("TreeLeaves", Vector3.new(5, 5, 5), spot + Vector3.new(0, 8, 0),
+			Color3.fromRGB(70, 140, 60), Enum.Material.Grass)
+		leaves.Shape = Enum.PartType.Ball
 	end
-
-	-- Rocks near the waterline (on the shore, not floating in the lake).
-	for _, spec in ipairs({
-		{ Vector3.new(-18, 0.4, 28), 1.4 },
-		{ Vector3.new(22, 0.4, 30), 1.1 },
-		{ Vector3.new(-95, 0.4, 18), 1.8 },
-		{ Vector3.new(96, 0.4, 20), 1.5 },
-		{ Vector3.new(-40, 0.4, 12), 1.2 },
-		{ Vector3.new(44, 0.4, 14), 1.6 },
-	}) do
-		MakeRock(world, spec[1], spec[2])
+	-- Rocks near the water.
+	for _, spot in ipairs({ Vector3.new(-20, 0, 20), Vector3.new(45, 0, 25), Vector3.new(-55, 0, 15) }) do
+		local rock = makePart("Rock", Vector3.new(3, 2, 3), spot, Color3.fromRGB(140, 140, 140), Enum.Material.Rock)
+		rock.Shape = Enum.PartType.Ball
 	end
-
-	-- Lanterns along the shore path.
-	for _, x in ipairs({ -20, -8, 8, 20, -70, -40, 40, 70 }) do
-		MakeLantern(world, Vector3.new(x, 0, 34))
-	end
-
-	BuildMonster(world)
-
-	-- Sunset haze.
-	local lighting = game:GetService("Lighting")
-	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Name = "SunsetHaze"
-	atmosphere.Density = 0.25
-	atmosphere.Offset = 0.2
-	atmosphere.Color = Color3.fromRGB(255, 170, 130)
-	atmosphere.Decay = Color3.fromRGB(140, 90, 160)
-	atmosphere.Glare = 0.4
-	atmosphere.Haze = 1.5
-	atmosphere.Parent = lighting
-
-	return world
+	-- A wooden rowboat floating near the dock.
+	local boat = makePart("Boat", Vector3.new(3, 1, 7), Vector3.new(10, 0.3, -15),
+		Color3.fromRGB(150, 105, 60), Enum.Material.Wood)
+	makePart("BoatSeat", Vector3.new(2.6, 0.3, 1), Vector3.new(10, 0.7, -15),
+		Color3.fromRGB(120, 85, 50), Enum.Material.Wood)
 end
 
--- Returns the monster's parts so MonsterEventService can show/hide them.
-function WorldBuilder.GetMonsterParts()
-	return monsterParts
+-- The giant lake monster: a huge shadow, fins and glowing eyes under the
+-- water. It starts invisible and surfaces during the event. It is BIG
+-- (30+ studs) and NEAR the dock (~60 studs) so players can actually see it.
+local function makeMonster()
+	local model = Instance.new("Model")
+	model.Name = "LakeMonster"
+
+	local shadow = Instance.new("Part")
+	shadow.Name = "Shadow"
+	shadow.Size = Vector3.new(34, 3, 14)
+	shadow.Position = GameConfig.WORLD.monsterPosition
+	shadow.Anchored = true
+	shadow.CanCollide = false
+	shadow.Material = Enum.Material.SmoothPlastic
+	shadow.Color = Color3.fromRGB(20, 40, 30)
+	shadow.Transparency = 1
+	shadow.Parent = model
+
+	local fin = Instance.new("Part")
+	fin.Name = "Fin"
+	fin.Size = Vector3.new(6, 7, 1)
+	fin.Position = GameConfig.WORLD.monsterPosition + Vector3.new(0, 4, 0)
+	fin.Anchored = true
+	fin.CanCollide = false
+	fin.Material = Enum.Material.SmoothPlastic
+	fin.Color = Color3.fromRGB(40, 140, 70)
+	fin.Transparency = 1
+	fin.Parent = model
+
+	for _, side in ipairs({ -1, 1 }) do
+		local eye = Instance.new("Part")
+		eye.Name = "Eye"
+		eye.Size = Vector3.new(2.5, 2.5, 2.5)
+		eye.Shape = Enum.PartType.Ball
+		eye.Position = GameConfig.WORLD.monsterPosition + Vector3.new(10, 4, side * 4)
+		eye.Anchored = true
+		eye.CanCollide = false
+		eye.Material = Enum.Material.Neon
+		eye.Color = Color3.fromRGB(255, 60, 60)
+		eye.Transparency = 1
+		eye.Parent = model
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 60, 60)
+		light.Range = 25
+		light.Brightness = 3
+		light.Enabled = false
+		light.Parent = eye
+	end
+
+	model.Parent = workspace
+	monsterModel = model
+	return model
 end
 
--- The lake surface + the spot water patches, for the wave's blood-red
--- water (MonsterEventService recolors them and restores them).
-function WorldBuilder.GetLakeParts()
-	return lakeParts
+local function makeQuestAndLeaderboardBoards()
+	makeSignBoard(GameConfig.WORLD.questBoardPosition + Vector3.new(0, 3.5, 0), "QUEST BOARD",
+		{ "Catch 5 fish: $150", "Earn $1,000: $300", "Catch a Rare+: $500" }, 7, 3.6)
+	leaderboardSurface = makeSignBoard(GameConfig.WORLD.leaderboardPosition + Vector3.new(0, 3.5, 0),
+		"TOP ANGLERS", { "No anglers yet!" }, 7, 3.6)
+end
+
+function WorldBuilder.BuildWorld()
+	-- Sunset lighting: warm orange-purple sky, soft fog.
+	local Lighting = game:GetService("Lighting")
+	Lighting.ClockTime = 17.5
+	Lighting.Brightness = 2
+	Lighting.Ambient = Color3.fromRGB(102, 76, 89)
+	Lighting.OutdoorAmbient = Color3.fromRGB(128, 102, 115)
+	Lighting.FogColor = Color3.fromRGB(200, 150, 130)
+	Lighting.FogEnd = 300
+	Lighting.GlobalShadows = true
+	Lighting.Technology = Enum.Technology.Voxel
+
+	makeWater()
+	makeShore()
+	makeDock()
+	makeSpotMarkers()
+	makeBasePlots()
+	makeDecorations()
+	makeMonster()
+	makeQuestAndLeaderboardBoards()
+end
+
+function WorldBuilder.GetMonsterModel()
+	return monsterModel
+end
+
+function WorldBuilder.GetLeaderboardSurface()
+	return leaderboardSurface
 end
 
 return WorldBuilder

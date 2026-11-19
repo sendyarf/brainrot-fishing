@@ -1,35 +1,49 @@
--- MonsterState: a tiny shared flag so FishingService can read the monster event
--- state without requiring MonsterEventService (which would be a require cycle).
--- MonsterEventService writes it; FishingService reads it for reel deadlines.
+-- MonsterState — the shared, single source of truth for the lake monster
+-- event's phase. The event service writes it; fishing, the HUD and the
+-- blessing checks read it. Phases: "idle" → "warning" → "active" →
+-- "blessing" → "idle". Keeping this in its own tiny module avoids the
+-- circular requires that a shared service would create.
+
+local GameConfig = require(game:GetService("ReplicatedStorage").Shared.GameConfig)
 
 local MonsterState = {}
-MonsterState.Active = false
-MonsterState.Phase = "Calm" -- "Calm" | "Warning" | "Active"
-MonsterState.NextEventAt = 0 -- os.clock() timestamp of the next wave
 
-function MonsterState.SetActive(active)
-	MonsterState.Active = active
-end
-
-function MonsterState.IsActive()
-	return MonsterState.Active
-end
-
-function MonsterState.SetPhase(phase)
-	MonsterState.Phase = phase
-end
+local phase = "idle" -- idle | warning | active | blessing
+local phaseEndsAt = 0 -- os.clock when the current phase ends
+local blessingEndsAt = 0 -- os.clock when the Calm Water Blessing ends
 
 function MonsterState.GetPhase()
-	return MonsterState.Phase
+	return phase
 end
 
-function MonsterState.SetNextEventAt(at)
-	MonsterState.NextEventAt = at
+function MonsterState.GetPhaseSecondsLeft()
+	return math.max(0, phaseEndsAt - os.clock())
 end
 
--- Seconds until the next wave (0 while one is running or unscheduled).
-function MonsterState.GetSecondsUntilNext()
-	return math.max(0, MonsterState.NextEventAt - os.clock())
+function MonsterState.SetPhase(newPhase, durationSeconds)
+	phase = newPhase
+	phaseEndsAt = os.clock() + durationSeconds
+	if newPhase == "blessing" then
+		blessingEndsAt = os.clock() + GameConfig.BLESSING_DURATION_SECONDS
+	end
+end
+
+function MonsterState.IsEventActive()
+	return phase == "active"
+end
+
+function MonsterState.IsWarning()
+	return phase == "warning"
+end
+
+-- Returns (blessingActive, secondsLeft) for a player. The blessing is
+-- server-wide: every player gets it after the monster calms down.
+function MonsterState.GetBlessingForPlayer(_player)
+	local left = blessingEndsAt - os.clock()
+	if left > 0 then
+		return true, math.ceil(left)
+	end
+	return false, 0
 end
 
 return MonsterState

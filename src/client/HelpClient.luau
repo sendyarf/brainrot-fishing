@@ -1,80 +1,74 @@
--- HelpClient: the HOW TO PLAY panel. It shows once when the player joins so
--- the game explains itself instead of leaving a new angler guessing, it
--- dismisses with GOT IT, and the "?" button in the HUD reopens it any time.
+-- HelpClient — the how-to-play panel: the loop in six lines, the steal
+-- rules, the monster rules and the rebirth goal. New players open it
+-- from the HELP button; it also shows once automatically on first join
+-- so nobody is lost in the first minute.
 
 local Players = game:GetService("Players")
-
-local UIHelpers = require(script.Parent:WaitForChild("UIHelpers"))
+local UIHelpers = require(script.Parent.UIHelpers)
 
 local HelpClient = {}
 
 local player = Players.LocalPlayer
-local gui = nil
-local helpPanel = nil
+local helpFrame = nil
+local helpOpen = false
+local shownOnce = false
 
-local STEPS = {
-	"1.  Walk to the glowing water at Shallow Shore — follow the light beam rising from the water, right in front of you when you spawn.",
-	"2.  Press E to cast. When a fish bites, press E (or tap REEL) while the needle is in the GREEN zone. 3 points lands the fish!",
-	"3.  Caught fish swim in your tanks and earn $ every second — even while you explore.",
-	"4.  Spend $ in the SHOP: better rods, tastier bait, more tank slots, and new fishing spots.",
-	"5.  LOCK BASE protects your tanks from thieves and from Naga Nila's wave. REBIRTH at $25,000 for +50% income forever!",
-	"6.  Steal from other players: walk up to their tank and hold E for 3 seconds — unless their base is locked or they are guarding it.",
-	"7.  Press H (or tap HOLSTER) to put your rod away. Casting picks it back up automatically.",
+local HELP_LINES = {
+	"1. Press E near the water to cast your rod.",
+	"2. When the bobber sinks, stop the needle in the GREEN zone.",
+	"3. Land 3 reel points to catch a fish — it swims into your tank.",
+	"4. Fish earn $/s. Spend it in the SHOP on rods, bait and tanks.",
+	"5. Hold E on another player's tank to steal their fish — unless their base is LOCKED.",
+	"6. When NAGA NILA stirs, finish your reel fast and guard your tanks.",
+	"7. At $25,000 cash, REBIRTH for +50% income and the Royal Pond.",
 }
 
-function HelpClient.Show()
-	if helpPanel then
-		helpPanel.Size = UIHelpers.FitPanelSize(560, 460)
-		helpPanel.Visible = true
-	end
-end
-
-function HelpClient.Hide()
-	if helpPanel then
-		helpPanel.Visible = false
-	end
-end
-
-function HelpClient.Toggle()
-	if helpPanel then
-		if not helpPanel.Visible then
-			helpPanel.Size = UIHelpers.FitPanelSize(560, 460)
-		end
-		helpPanel.Visible = not helpPanel.Visible
-	end
-end
-
 function HelpClient.Init()
-	gui = player:WaitForChild("PlayerGui"):WaitForChild("BrainrotFishingGui")
-
-	helpPanel = UIHelpers.NewPanel(gui, "HelpPanel", UIHelpers.FitPanelSize(560, 460), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
-	UIHelpers.NewLabel(helpPanel, "HelpTitle", "HOW TO PLAY", UDim2.new(1, -32, 0, 32), UDim2.new(0, 16, 0, 12), 26, UIHelpers.AccentGold).TextXAlignment = Enum.TextXAlignment.Center
-	-- The goal, up front: players asked what the game is about beyond fishing.
-	local goal = UIHelpers.NewLabel(helpPanel, "GoalLine", "GOAL: grow your $/s income, catch all 12 fish, and become the MASTER ANGLER — while thieves and Naga Nila try to steal your tanks!", UDim2.new(1, -32, 0, 36), UDim2.new(0, 16, 0, 46), 15, UIHelpers.AccentGreen)
-	goal.TextWrapped = true
-	goal.TextXAlignment = Enum.TextXAlignment.Center
-	local stepsFrame = Instance.new("ScrollingFrame")
-	stepsFrame.Name = "StepsList"
-	stepsFrame.Size = UDim2.new(1, -32, 1, -148)
-	stepsFrame.Position = UDim2.new(0, 16, 0, 88)
-	stepsFrame.BackgroundTransparency = 1
-	stepsFrame.BorderSizePixel = 0
-	stepsFrame.ScrollBarThickness = 6
-	stepsFrame.CanvasSize = UDim2.new(0, 0, 0, 7 * 56 + 4)
-	stepsFrame.Parent = helpPanel
-	for i, step in ipairs(STEPS) do
-		local label = UIHelpers.NewLabel(stepsFrame, "Step" .. i, step, UDim2.new(1, -8, 0, 52), UDim2.new(0, 0, 0, 4 + (i - 1) * 56), 16, UIHelpers.TextWhite)
-		label.TextWrapped = true
-		label.TextXAlignment = Enum.TextXAlignment.Left
-		label.TextYAlignment = Enum.TextYAlignment.Top
-	end
-	local gotIt = UIHelpers.NewButton(helpPanel, "GotItButton", "GOT IT!", UDim2.fromOffset(150, 40), UDim2.new(0.5, 0, 1, -16), Color3.fromRGB(40, 160, 80), 18, Vector2.new(0.5, 1))
-	gotIt.MouseButton1Click:Connect(function()
-		HelpClient.Hide()
+	-- Show once on first join, after a short delay so the world loads.
+	task.delay(3, function()
+		if not shownOnce then
+			shownOnce = true
+			HelpClient.ToggleHelp()
+		end
 	end)
+end
 
-	-- Show once on join: a new player should never wonder what to do.
-	helpPanel.Visible = true
+local function buildHelp()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local gui = playerGui:FindFirstChild("HelpUI")
+	if not gui then
+		gui = Instance.new("ScreenGui")
+		gui.Name = "HelpUI"
+		gui.ResetOnSpawn = false
+		gui.IgnoreGuiInset = true
+		gui.Parent = playerGui
+	end
+	if helpFrame then
+		helpFrame:Destroy()
+	end
+	helpFrame = UIHelpers.MakeFrame(gui, UDim2.new(0, 520, 0, 380), UDim2.new(0.5, -260, 0.5, -190))
+	UIHelpers.MakeLabel(helpFrame, UDim2.new(1, 0, 0, 44), UDim2.new(0, 0, 0, 8), "HOW TO PLAY", 28, UIHelpers.ACCENT)
+	local closeButton = UIHelpers.MakeButton(helpFrame, UDim2.new(0, 40, 0, 40), UDim2.new(1, -50, 0, 8), "X", 20)
+	closeButton.BackgroundColor3 = Color3.fromRGB(200, 70, 70)
+	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeButton.MouseButton1Click:Connect(function()
+		HelpClient.ToggleHelp()
+	end)
+	for i, line in ipairs(HELP_LINES) do
+		local label = UIHelpers.MakeLabel(helpFrame, UDim2.new(1, -24, 0, 36), UDim2.new(0, 12, 0, 56 + (i - 1) * 42),
+			line, 16, UIHelpers.TEXT)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+	end
+end
+
+function HelpClient.ToggleHelp()
+	helpOpen = not helpOpen
+	if helpOpen then
+		buildHelp()
+	elseif helpFrame then
+		helpFrame:Destroy()
+		helpFrame = nil
+	end
 end
 
 return HelpClient

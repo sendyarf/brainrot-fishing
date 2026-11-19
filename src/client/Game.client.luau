@@ -1,81 +1,98 @@
--- Game.client.luau: Brainrot Fishing client bootstrap. Creates the one ScreenGui
--- every module shares, then starts the HUD, fishing, shop, tanks, dex, quests
--- and monster warnings. The client only draws UI and sends input; the server
--- owns all money, fish and state.
---
--- Every module starts inside a pcall: one module failing must never take the
--- rest of the UI down with it (a silent half-built HUD is worse than an error
--- message). Failures are warned to the Output log AND shown on screen in red,
--- so a playtester can screenshot exactly what broke.
+-- Game.client.luau — client entry point for Brainrot Fishing.
+-- Rojo turns this file's folder into a LocalScript named "Client", so
+-- every ModuleScript beside it is a CHILD of this script: require them
+-- with script:WaitForChild. This script waits for the server's
+-- RemoteEvents, starts every UI module, wires the HUD buttons and
+-- handles notifications (toasts) and steal alerts from the server.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
 
--- The single ScreenGui for the whole game UI (never resets on respawn).
-local gui = Instance.new("ScreenGui")
-gui.Name = "BrainrotFishingGui"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.DisplayOrder = 10
-gui.Parent = playerGui
+-- All client modules are children of this LocalScript.
+local ClientState = require(script:WaitForChild("ClientState"))
+local HUDClient = require(script:WaitForChild("HUDClient"))
+local FishingClient = require(script:WaitForChild("FishingClient"))
+local ShopClient = require(script:WaitForChild("ShopClient"))
+local TankClient = require(script:WaitForChild("TankClient"))
+local BrainrotpediaClient = require(script:WaitForChild("BrainrotpediaClient"))
+local QuestClient = require(script:WaitForChild("QuestClient"))
+local MonsterWarningClient = require(script:WaitForChild("MonsterWarningClient"))
+local HelpClient = require(script:WaitForChild("HelpClient"))
+local UIHelpers = require(script:WaitForChild("UIHelpers"))
 
--- Hide the default backpack hotbar: the fishing rod is a Tool, so Roblox
--- shows its hotbar slot at the bottom-center, overlapping our SHOP button.
--- The rod auto-equips and casting is E, so the hotbar is pure clutter.
--- SetCoreGuiEnabled can fail if called too early, hence the retry loop.
-task.spawn(function()
-	local StarterGui = game:GetService("StarterGui")
-	for _ = 1, 5 do
-		local ok = pcall(function()
-			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
-		end)
-		if ok then
-			break
-		end
-		task.wait(1)
-	end
+-- Wait for the server to create the RemoteEvents folder.
+local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+
+-- State sync from the server feeds every UI module.
+remotes.StateSync.OnClientEvent:Connect(function(newState)
+	ClientState.Update(newState)
 end)
 
--- On-screen boot error readout (hidden unless a module fails to start).
-local errorLabel = Instance.new("TextLabel")
-errorLabel.Name = "BootErrorLabel"
-errorLabel.Size = UDim2.fromOffset(640, 90)
-errorLabel.Position = UDim2.new(0.5, 0, 0, 122)
-errorLabel.AnchorPoint = Vector2.new(0.5, 0)
-errorLabel.BackgroundColor3 = Color3.fromRGB(60, 10, 10)
-errorLabel.BackgroundTransparency = 0.2
-errorLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
-errorLabel.TextSize = 14
-errorLabel.Font = Enum.Font.GothamBold
-errorLabel.TextWrapped = true
-errorLabel.TextXAlignment = Enum.TextXAlignment.Left
-errorLabel.TextYAlignment = Enum.TextYAlignment.Top
-errorLabel.Text = ""
-errorLabel.Visible = false
-errorLabel.Parent = gui
+-- Toast notifications (purchases, sales, warnings) bottom-centre.
+local playerGui = player:WaitForChild("PlayerGui")
+local toastGui = Instance.new("ScreenGui")
+toastGui.Name = "ToastUI"
+toastGui.ResetOnSpawn = false
+toastGui.IgnoreGuiInset = true
+toastGui.Parent = playerGui
+local toastLabel = UIHelpers.MakeLabel(toastGui, UDim2.new(0, 480, 0, 44), UDim2.new(0.5, -240, 1, -230), "", 18)
+toastLabel.BackgroundTransparency = 0.25
+toastLabel.BackgroundColor3 = UIHelpers.PANEL
+toastLabel.Visible = false
 
-local function SafeInit(moduleName)
-	local ok, err = pcall(function()
-		require(script.Parent:WaitForChild(moduleName)).Init()
+local toastToken = 0
+local function showToast(message)
+	toastToken += 1
+	local token = toastToken
+	toastLabel.Text = message
+	toastLabel.Visible = true
+	task.delay(4, function()
+		if token == toastToken then
+			toastLabel.Visible = false
+		end
 	end)
-	if not ok then
-		warn("[BrainrotFishing] " .. moduleName .. " failed to start: " .. tostring(err))
-		errorLabel.Text = errorLabel.Text .. moduleName .. " FAILED: " .. tostring(err) .. "\n"
-		errorLabel.Visible = true
-	end
 end
 
--- Start every client module. Order: HUD first (it owns the StateSync feed),
--- then fishing input, then the panels, then the alert listeners.
-SafeInit("HUDClient")
-SafeInit("FishingClient")
-SafeInit("ShopClient")
-SafeInit("BrainrotpediaClient")
-SafeInit("QuestClient")
-SafeInit("TankClient")
-SafeInit("MonsterWarningClient")
-SafeInit("HelpClient")
+remotes.Notify.OnClientEvent:Connect(function(message)
+	showToast(message)
+end)
 
-print("Brainrot Fishing client started: HUD, fishing, shop, dex, quests live.")
+remotes.StealAlert.OnClientEvent:Connect(function(thiefName, fishName)
+	showToast("Someone is stealing your " .. fishName .. "! (" .. thiefName .. ")")
+end)
+
+-- Start every UI module.
+HUDClient.Init()
+FishingClient.Init(remotes)
+ShopClient.Init(remotes)
+TankClient.Init(remotes)
+BrainrotpediaClient.Init()
+QuestClient.Init(remotes)
+MonsterWarningClient.Init(remotes)
+HelpClient.Init()
+
+-- HUD buttons open the panels; LOCK and REBIRTH fire straight to the server.
+HUDClient.SetCallbacks({
+	shop = function()
+		ShopClient.ToggleShop()
+	end,
+	dex = function()
+		BrainrotpediaClient.ToggleDex()
+	end,
+	quests = function()
+		QuestClient.ToggleQuests()
+	end,
+	lock = function()
+		remotes.LockBase:FireServer()
+	end,
+	rebirth = function()
+		remotes.DoRebirth:FireServer()
+	end,
+	help = function()
+		HelpClient.ToggleHelp()
+	end,
+})
+
+print("[Brainrot Fishing] Client ready. Welcome to the lake!")

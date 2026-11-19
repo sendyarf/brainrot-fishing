@@ -1,93 +1,70 @@
--- CatchService: the catch lottery. Rolls a rarity tier from the spot's table,
--- bumps tiers with the player's luck, picks a fish inside the tier, and rolls
--- Golden/Rainbow mutations. Pure logic: no state of its own.
--- Functions: RollCatch, RollMutation, ApplyLuckBonus.
+-- CatchService — rolls what a cast catches: rarity tier, fish and mutation.
+-- The spot sets the baseline odds; luck (rod + bait + Perfect hits +
+-- blessing) upgrades the tier. Each luck point is a percent chance to climb
+-- one tier. Mythic stays Mythic. Mutations roll independently afterwards.
 
-local GameConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("GameConfig"))
-local FishDefinitions = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("FishDefinitions"))
+local GameConfig = require(game:GetService("ReplicatedStorage").Shared.GameConfig)
+local FishDefinitions = require(game:GetService("ReplicatedStorage").Shared.FishDefinitions)
 
 local CatchService = {}
 
--- Rolls a rarity tier from the spot's weighted table (Dragon Rod doubles Mythic).
-local function RollTier(spotId, mythicMult)
-	local spot = GameConfig.Spots[spotId]
-	if not spot then
-		spot = GameConfig.Spots.Shallow
-	end
-	local weights = {}
-	local total = 0
-	for _, tier in ipairs(FishDefinitions.RarityOrder) do
-		local w = spot.Rates[tier] or 0
-		if tier == "Mythic" then
-			w = w * (mythicMult or 1)
-		end
-		weights[tier] = w
-		total = total + w
-	end
-	local roll = math.random() * total
-	local acc = 0
-	for _, tier in ipairs(FishDefinitions.RarityOrder) do
-		acc = acc + weights[tier]
-		if roll <= acc then
+local TIER_ORDER = { "Common", "Rare", "Epic", "Legendary", "Mythic" }
+
+-- Rolls a rarity tier from a spot's odds table (percentages).
+local function rollTierFromOdds(odds)
+	local roll = math.random(1, 100)
+	local running = 0
+	for _, tier in ipairs(TIER_ORDER) do
+		running += odds[tier] or 0
+		if roll <= running then
 			return tier
 		end
 	end
 	return "Common"
 end
 
--- Each luck point is a chance (luck%) to bump the catch one tier up.
--- Luck is capped at 80%; Mythic never bumps further.
+-- Applies luck: each luck point is a 1% chance to climb one tier.
 function CatchService.ApplyLuckBonus(tier, luckPercent)
-	local luck = math.min(luckPercent or 0, 80)
-	if luck <= 0 then
-		return tier
+	local index = table.find(TIER_ORDER, tier) or 1
+	local capped = math.min(luckPercent, GameConfig.MAX_LUCK_PERCENT)
+	if math.random(1, 100) <= capped and index < #TIER_ORDER then
+		index += 1
 	end
-	if math.random(1, 100) <= luck then
-		return FishDefinitions.GetNextTier(tier)
-	end
-	return tier
+	return TIER_ORDER[index]
 end
 
--- Rolls a mutation. Rainbow (1%) beats Golden (5%) when both hit.
+-- Rolls the mutation for a catch. Rainbow (1%) beats Golden (5%).
 function CatchService.RollMutation()
-	local rainbow = math.random() < GameConfig.MutationRates.Rainbow
-	local golden = math.random() < GameConfig.MutationRates.Golden
-	if rainbow then
-		return "Rainbow"
-	elseif golden then
-		return "Golden"
+	local roll = math.random(1, 100)
+	if roll <= GameConfig.RAINBOW_CHANCE_PERCENT then
+		return "rainbow"
+	elseif roll <= GameConfig.RAINBOW_CHANCE_PERCENT + GameConfig.GOLDEN_CHANCE_PERCENT then
+		return "golden"
 	end
-	return "None"
+	return "none"
 end
 
--- Rolls one full catch: tier (spot table + luck), a fish inside the tier,
--- and a mutation. luckPercent = rod luck + bait luck + blessing + Perfect hits.
--- Mythic picks are weighted (Naga 40, Tung 25, Tralalero 20, Bombardiro 15);
--- every other tier picks uniformly.
-function CatchService.RollCatch(spotId, luckPercent, mythicMult)
-	local tier = RollTier(spotId, mythicMult)
+-- Full catch roll: tier from the spot, luck upgrade, a random fish in the
+-- tier, then the mutation. Returns (fish, mutation, tier).
+function CatchService.RollCatch(spotId, luckPercent, mythicBoost)
+	local spot = GameConfig.GetSpotById(spotId)
+	local tier = rollTierFromOdds(spot.odds)
+
+	-- The Dragon Rod doubles the Mythic chance: re-roll once if not Mythic.
+	if mythicBoost and mythicBoost > 1 and tier ~= "Mythic" then
+		local second = rollTierFromOdds(spot.odds)
+		if second == "Mythic" then
+			tier = "Mythic"
+		end
+	end
+
 	tier = CatchService.ApplyLuckBonus(tier, luckPercent)
-	local pool = FishDefinitions.FishByTier[tier] or FishDefinitions.FishByTier.Common
-	local fishId = pool[math.random(1, #pool)]
-	if tier == "Mythic" and FishDefinitions.MythicWeights then
-		local total = 0
-		for _, id in ipairs(pool) do
-			total = total + (FishDefinitions.MythicWeights[id] or 0)
-		end
-		if total > 0 then
-			local roll = math.random() * total
-			local acc = 0
-			for _, id in ipairs(pool) do
-				acc = acc + (FishDefinitions.MythicWeights[id] or 0)
-				if roll <= acc then
-					fishId = id
-					break
-				end
-			end
-		end
+	local fish = FishDefinitions.GetRandomFishInRarity(tier)
+	if not fish then
+		fish = FishDefinitions.GetFishById("lele")
 	end
 	local mutation = CatchService.RollMutation()
-	return fishId, tier, mutation
+	return fish, mutation, tier
 end
 
 return CatchService
