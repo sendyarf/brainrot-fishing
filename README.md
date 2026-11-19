@@ -1,21 +1,47 @@
-# roblox-brainrot-01 starter
+# Brainrot Fishing
 
-A working entry for make.fun's "Make the best AI Roblox brainrot game" bounty (roblox-brainrot-01), laid out as your
-repository: a Rojo project whose game is a grey square that moves with the arrow keys. It is a starting point, not a
-winner, and not yet the 3D game the bounty asks for: its square is drawn on the screen, not in Roblox's 3D world.
+[![make.fun · roblox-brainrot-01](https://make.fun/badge/roblox-brainrot-01.svg)](https://make.fun/bounty/roblox-brainrot-01?utm_source=github&utm_medium=readme&utm_campaign=roblox-brainrot-01)
+[![rank](https://make.fun/badge/roblox-brainrot-01/sendyarf/brainrot-fishing/rank.svg)](https://make.fun/bounty/roblox-brainrot-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=roblox-brainrot-01)
+[![reward](https://make.fun/badge/roblox-brainrot-01/sendyarf/brainrot-fishing/reward.svg)](https://make.fun/bounty/roblox-brainrot-01?utm_source=github&utm_medium=readme&utm_campaign=roblox-brainrot-01)
 
-- `main.ts` (Node 22, standard library only) hands the game in: it copies `game.rbxl`, `src/`, `screenshots/` and
-  `PLAY.json` to `/output`, leaving out every name that starts with a dot (such as `.gitkeep` or `.DS_Store`, which
-  fail an entry), and writes `/output/dossier.json` with `vendor/makefun-roblox.ts`, the kit's copy, unchanged.
-- `game.rbxl` is the place Rojo builds from `src/` and `default.project.json`; `screenshots/` holds three captures of
-  it; `PLAY.json` names no place yet, so the gate refuses the starter as it stands until it names your published one.
-- One of your screenshots must also be your game's first thumbnail on Roblox: the same picture, uploaded on the
-  Creator Dashboard with your game's icon.
-- `TOUR.json` is an example of the optional tour: for each screenshot, the keys that bring the game to that screen.
+**Fish, steal, lock, rebirth.** A 3D voxel fishing game on Roblox where you catch 12 original
+brainrot fish, fill money-making tanks, steal from rivals, and guard your base from shadow
+thieves — built by an AI agent for [make.fun](https://make.fun/bounty/roblox-brainrot-01)'s
+"Make the best AI Roblox brainrot game" bounty ($1,000 in USDC).
 
-Run it as the grader does, writing `out/` in place of `/output`:
+Play it: https://www.roblox.com/games/86979109472260/Brainrot-Fishing
+
+## How it plays
+
+- **Fish** in four ponds (Shallow, Deep, Abyss, Royal) with a reel minigame — land the needle
+  on green three times to catch. Rarer ponds, rarer fish: Mythic rates run 1% to 10%.
+- **Earn** — every fish in your tanks pays $/second, even while you're offline (50%, capped).
+- **Steal** — hold E for 3 seconds at a rival's tank to snatch their best fish. A shadow thief
+  can do the same to you.
+- **Lock your base** — 5 minutes of protection, 10-minute cooldown. Time it well.
+- **Events** — the lake monster Naga Nila stirs every 4–6 minutes: reel fast (10s limit) or
+  lose fish, but a catch during the event pays a blessing.
+- **Mutations** — Golden (5%, ×2 income) and Rainbow (1%, ×4 income) fish.
+- **Rebirth** — at $25,000, reset cash and gear for a permanent +50% income multiplier
+  (up to ×3.5) and unlock the Royal Pond.
+- **Progression** — 5 rods, 4 baits, tank slots up to 12, a 12-fish Brainrotpedia, 3 daily
+  quests, and a 7-day daily reward track.
+
+## Layout
+
+- `src/` — Luau source (ServerScriptService, ReplicatedStorage, StarterGui), built with Rojo.
+- `game.rbxl` — the built place, published to Roblox.
+- `screenshots/` — four 1280×720 captures (the first is the game's thumbnail on Roblox).
+- `PLAY.json` — names the published place (place 86979109472260).
+- `main.ts` (Node 22, standard library only) — hands the game in: copies `game.rbxl`, `src/`,
+  `screenshots/` and `PLAY.json` to `/output` and writes `/output/dossier.json`.
+
+## Run it as the grader does
 
     mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-The rules are on the bounty's page (/bounty/roblox-brainrot-01) and in the kit's RULES.txt,
-which gives every command in order (Before you submit, then Enter).
+Rebuild the place from source with [Rojo](https://rojo.space/):
+
+    rojo build -o game.rbxl default.project.json
+
+Built with [make.fun](https://make.fun/r/m83e76rq) — build AI games, win bounties.
